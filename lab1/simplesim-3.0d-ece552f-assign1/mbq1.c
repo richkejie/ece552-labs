@@ -19,7 +19,7 @@ int main() {
 	/* initialization */
 	int N = 10000000; /* 10,000,000 loop iterations */
 	/* register keyword tells compiler to use registers */
-	register int i = 0; /* iteratore */
+	register int i = 0; /* iterator */
 
 	register int A = 0, B = 0, C = 0;
 	register int *D;

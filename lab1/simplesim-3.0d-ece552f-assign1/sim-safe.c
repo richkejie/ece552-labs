@@ -466,11 +466,29 @@ sim_main(void)
     int delay = delay_max;
     if (r_in[max_delay_i] != DNA && delay > 0) { /* if delay >= 0 then we have a stall */
       /* skip stores b/c they are bypassed (WM bypass) */
+      // check if I2 has delay for store instrs
+      store_delay_of_i2 = reg_ready_q2[r_in[1]] - sim_num_insn;
       if (!(
-        (max_delay_i == 0) &&
-        (((MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_STORE)))
+        (MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_STORE)
       )) {
         /* otherwise, we have a RAW hazard */
+        sim_num_RAW_hazard_q2++; 
+
+        /* increment stall counter */
+        if (delay == 1) num_1cyc_stalls_q2++;
+        else if (delay == 2) num_2cyc_stalls_q2++;
+        else num_other_stalls_q2++;
+
+        /* current instr stalls for 'delay' cycles
+            subtract that delay from all reg_ready's
+            to advance each registers waittime */
+        int j;
+        for (j=0; j<MD_TOTAL_REGS; j++) {
+          if (reg_ready_q2[j] - delay < 0) reg_ready_q2[j] = 0;
+          else reg_ready_q2[j] -= delay;
+        }
+      } else if (store_delay_of_i2 > 0) { // delay in address operand of store instr
+        delay = store_delay_of_i2;
         sim_num_RAW_hazard_q2++; 
 
         /* increment stall counter */
@@ -493,6 +511,7 @@ sim_main(void)
 /* find if current instr requires register ready delays */
 /* q1 */
 if (
+  // these flags for q1 maybe not necessary --- try removing these
   ((MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_LOAD)) ||
   (MD_OP_FLAGS(op) & F_ICOMP)
 ) {
