@@ -510,17 +510,12 @@ sim_main(void)
 
 /* find if current instr requires register ready delays */
 /* q1 */
-if (
-  // these flags for q1 maybe not necessary --- try removing these
-  ((MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_LOAD)) ||
-  (MD_OP_FLAGS(op) & F_ICOMP)
-) {
-  /* if instruction is a load or int computation (add, sub, etc.)
-      need to stall for 2 cycles (2 stages between ID and WB stages) */
-  // on next instr, sim_num_insn will increment and the 'delay' will be 2 cycles
-  if(r_out[0] != DNA) reg_ready_q1[r_out[0]] = sim_num_insn + 3; 
-  if(r_out[1] != DNA) reg_ready_q1[r_out[1]] = sim_num_insn + 3;
-}
+/* if instruction has target registers
+    need to stall for 2 cycles (2 stages between ID and WB stages) */
+// on next instr, sim_num_insn will increment and the 'delay' will be 2 cycles
+if(r_out[0] != DNA) reg_ready_q1[r_out[0]] = sim_num_insn + 3; 
+if(r_out[1] != DNA) reg_ready_q1[r_out[1]] = sim_num_insn + 3;
+
 /* don't need to encode 1 cycle stall for q1
     since 1 cycle stall only occurs if dependent
     instr is 2 instrs away */
