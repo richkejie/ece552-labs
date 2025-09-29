@@ -467,7 +467,7 @@ sim_main(void)
     if (r_in[max_delay_i] != DNA && delay > 0) { /* if delay >= 0 then we have a stall */
       /* skip stores b/c they are bypassed (WM bypass) */
       // check if I2 has delay for store instrs
-      store_delay_of_i2 = reg_ready_q2[r_in[1]] - sim_num_insn;
+      int store_delay_of_i2 = reg_ready_q2[r_in[1]] - sim_num_insn;
       if (!(
         (MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_STORE)
       )) {
