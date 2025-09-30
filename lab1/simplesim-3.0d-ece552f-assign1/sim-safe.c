@@ -466,11 +466,29 @@ sim_main(void)
     int delay = delay_max;
     if (r_in[max_delay_i] != DNA && delay > 0) { /* if delay >= 0 then we have a stall */
       /* skip stores b/c they are bypassed (WM bypass) */
+      // check if I2 has delay for store instrs
+      int store_delay_of_i2 = reg_ready_q2[r_in[1]] - sim_num_insn;
       if (!(
-        (max_delay_i == 0) &&
-        (((MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_STORE)))
+        (MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_STORE)
       )) {
         /* otherwise, we have a RAW hazard */
+        sim_num_RAW_hazard_q2++; 
+
+        /* increment stall counter */
+        if (delay == 1) num_1cyc_stalls_q2++;
+        else if (delay == 2) num_2cyc_stalls_q2++;
+        else num_other_stalls_q2++;
+
+        /* current instr stalls for 'delay' cycles
+            subtract that delay from all reg_ready's
+            to advance each registers waittime */
+        int j;
+        for (j=0; j<MD_TOTAL_REGS; j++) {
+          if (reg_ready_q2[j] - delay < 0) reg_ready_q2[j] = 0;
+          else reg_ready_q2[j] -= delay;
+        }
+      } else if (store_delay_of_i2 > 0) { // delay in address operand of store instr
+        delay = store_delay_of_i2;
         sim_num_RAW_hazard_q2++; 
 
         /* increment stall counter */
@@ -492,16 +510,12 @@ sim_main(void)
 
 /* find if current instr requires register ready delays */
 /* q1 */
-if (
-  ((MD_OP_FLAGS(op) & F_MEM) && (MD_OP_FLAGS(op) & F_LOAD)) ||
-  (MD_OP_FLAGS(op) & F_ICOMP)
-) {
-  /* if instruction is a load or int computation (add, sub, etc.)
-      need to stall for 2 cycles (2 stages between ID and WB stages) */
-  // on next instr, sim_num_insn will increment and the 'delay' will be 2 cycles
-  if(r_out[0] != DNA) reg_ready_q1[r_out[0]] = sim_num_insn + 3; 
-  if(r_out[1] != DNA) reg_ready_q1[r_out[1]] = sim_num_insn + 3;
-}
+/* if instruction has target registers
+    need to stall for 2 cycles (2 stages between ID and WB stages) */
+// on next instr, sim_num_insn will increment and the 'delay' will be 2 cycles
+if(r_out[0] != DNA) reg_ready_q1[r_out[0]] = sim_num_insn + 3; 
+if(r_out[1] != DNA) reg_ready_q1[r_out[1]] = sim_num_insn + 3;
+
 /* don't need to encode 1 cycle stall for q1
     since 1 cycle stall only occurs if dependent
     instr is 2 instrs away */
