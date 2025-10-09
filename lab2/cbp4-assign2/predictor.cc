@@ -5,7 +5,8 @@
 /////////////////////////////////////////////////////////////
 
 #define TWO_BIT_SAT_TABLE_BITS 8192
-#define TEN_LSB_MASK 0x3FF
+#define TEN_LSB_MASK 0xFFF
+
 int *state_table_2bitsat;
 void InitPredictor_2bitsat() {
   /* 
@@ -15,15 +16,15 @@ void InitPredictor_2bitsat() {
     3 - strong T
   */
   /*
-    represent each counter as a byte (so 8192/8 = 1024 counters)
+    represent each counter as a byte (so 8192/2 = 4096 counters)
     easier to implement indexing in this way...
   */
-  state_table_2bitsat = (int*)malloc(TWO_BIT_SAT_TABLE_BITS/8*sizeof(int)); 
+  state_table_2bitsat = (int*)malloc(TWO_BIT_SAT_TABLE_BITS/2*sizeof(int)); 
   int i = 0;
   /*
     init all counters to weak not taken
   */
-  while(i < TWO_BIT_SAT_TABLE_BITS/8){
+  while(i < TWO_BIT_SAT_TABLE_BITS/2){
     *(state_table_2bitsat + i) = 1;
     i++;
   }
@@ -56,8 +57,33 @@ void UpdatePredictor_2bitsat(UINT32 PC, bool resolveDir, bool predDir, UINT32 br
 /////////////////////////////////////////////////////////////
 // 2level
 /////////////////////////////////////////////////////////////
-
+#define HISTORY_LEVEL_ENTRIES 512;
+#define HISTORY_BITS 6;
+#define THREE_LSB_MASK 0x7;
+#define TWELVE_LSB_MASK 0xFFF
+int *history_table_forlevel;
+int *state_table_2levelsat;
 void InitPredictor_2level() {
+  /* 
+    0 - strong NT
+    1 - weak NT
+    2 - weak T
+    3 - strong T
+  */
+  /*
+    represent each counter as a byte (so 8192/8 = 1024 counters)
+    easier to implement indexing in this way...
+  */
+  history_table_forlevel = (int*)malloc(TWO_BIT_SAT_TABLE_BITS/8*sizeof(int)); 
+  state_table_2levelsat = (int*)malloc(HISTORY_LEVEL_ENTRIES/8*sizeof(int)); 
+  int i = 0;
+  /*
+    init all counters to weak not taken
+  */
+  while(i < TWO_BIT_SAT_TABLE_BITS/8){
+    *(state_table_2bitsat + i) = 1;
+    i++;
+  }
 
 }
 
