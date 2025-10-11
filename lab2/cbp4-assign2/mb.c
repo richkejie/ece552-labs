@@ -2,6 +2,11 @@
 	Richard Wu | wuricha8 | 1008078296
 	Christian
 	microbenchmark for ECE552 Lab 2
+
+	compilation:
+		gcc -O0 mb.c -o mb
+	objdump:
+		objdump mb -x -d -l > mb.objdump
 */
 
 #include <stdio.h>
