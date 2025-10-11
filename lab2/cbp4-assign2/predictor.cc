@@ -65,7 +65,7 @@ BHT table:
   512 entries, 6 bit entries --> 512 bytes
   (CACTI pureRAM must allocate entries in bytes)
 PHT table:
-  8 tables of 62 entries, 2 bit counter/entry
+  8 tables of 64 entries, 2 bit counter/entry
   --> 8*64 = 512 bytes
 total bytes = 512 + 512 = 1024
 **block size = 1 (1 byte/entry)
