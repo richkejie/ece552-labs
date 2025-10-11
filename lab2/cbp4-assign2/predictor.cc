@@ -78,7 +78,7 @@ void InitPredictor_2level() {
       PC[3:12] (bits 3-11, total 9 bits) indexes bht to select on of 512 entries
       6-bit BHR indexes chosen pht table to select one of 64 2-bit sat counters
   */
-  int num_counters_per_table = 2 << NUM_BHR_BITS;
+  int num_counters_per_table = 1 << NUM_BHR_BITS; // 1 << 6 = 64
   bht_table_2level = (int*)malloc(NUM_BHT_TABLE_ENTRIES*sizeof(int));
   pht_tables_2level = (int**)malloc(NUM_PHT_TABLES*sizeof(int*));
   /*
