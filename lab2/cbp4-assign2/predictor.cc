@@ -1,4 +1,5 @@
 #include "predictor.h"
+#include <cassert>
 
 /////////////////////////////////////////////////////////////
 // 2bitsat
@@ -174,7 +175,7 @@ TAGE implementation:
     2^256 entries (?)
 
 T_Block{
-  ctr: pointer to array of counters --> for bimodal prediction
+  ctr: pointer to array of counters --> for ctr prediction
   tag: pointer to array of tags
   u: pointer to array of useful counters, u
 }
@@ -211,18 +212,195 @@ if incorrect prediction:
 
 
 */
+/*
+Storage Analysis
+GHR = 256 bits
+T0 = (T0_num_entries * 3)  bits = 1024 * 3  = ***
+Ti = (Ti_num_entries * 13) bits = 1024 * 13 = 13312
+Ti, i = [1,8] --> 13312 * 8 = 106496
+total = 256 + *** + 106496 = *** bits = ***Kbits
+*/
 
+#define NUM_TBLOCKS             9
+#define INIT_CTR_STATE          3 //Weak not taken for a 3 bit counter
+#define INIT_USABILITY_LEVEL    0  //No usefulness for a 2 bit counter
+#define GHR_BITS                256
+#define TAG_BITS                13
+#define RESET_PERIOD            500000
+
+// prediction counter ranges
+#define CTR_BITS                 3 // 3 bits for Ti, i!=0
+#define CTR_BITS_T0              3 // 3 bits fot T0
+
+// hash parameters
+#define H1_FOLD_WIDTH           13
+#define H1_FOLD_MASK            0x00001FFF
+#define H2_FOLD_WIDTH           7
+#define H2_FOLD_MASK            0x00001FFF
+
+//Data structures
+typedef struct TBlock{
+  int     *ctr;
+  UINT32  *tag; 
+  int     *u;
+} TBlock;
+
+
+//Function prototypes
+void incr_u_ctr(int, int);
+void decr_u_ctr(int, int);
+void allocate(int, int, bool, UINT32, int);
+void update_ctr(int, int, int, bool);
+bool get_prediction(int, int);
+void update_GHR(bool);
+UINT32 hash_fcn(UINT32, int, int, UINT32);
+
+//Global variables
+UINT32 GHR[GHR_BITS/32] = {0};
+TBlock **TBLOCKS;
+int PROVIDER_COMPONENT;
+UINT32 H1[NUM_TBLOCKS];
+UINT32 H2[NUM_TBLOCKS];
+int HISTORY_LENGTHS[NUM_TBLOCKS]  = {0,2,4,8,16,32,64,128,256};
+int TBLOCK_SIZES[NUM_TBLOCKS]     = {1024,1024,1024,1024,1024,1024,1024,1024,1024};
+int BRANCH_COUNTER = 0;
 
 void InitPredictor_openend() {
-
+	TBLOCKS = (TBlock**)malloc(NUM_TBLOCKS*sizeof(TBlock*));
+	for(int i = 0; i < NUM_TBLOCKS; i++){
+		TBLOCKS[i] = (TBlock*)malloc(sizeof(TBlock));
+		TBLOCKS[i]->ctr   = (int*)malloc(TBLOCK_SIZES[i]*sizeof(int));
+		TBLOCKS[i]->tag       = (UINT32*)malloc(TBLOCK_SIZES[i]*sizeof(UINT32));
+		TBLOCKS[i]->u         = (int*)malloc(TBLOCK_SIZES[i]*sizeof(int));
+		for(int j = 0; j < TBLOCK_SIZES[i]; j++){
+			TBLOCKS[i]->ctr[j]  = (int)INIT_CTR_STATE;
+			TBLOCKS[i]->u[j]        = (int)INIT_USABILITY_LEVEL;
+			TBLOCKS[i]-> tag[j]     = (UINT32)0;
+		}
+	}
 }
 
 bool GetPrediction_openend(UINT32 PC) {
+	BRANCH_COUNTER++;
 
-  return TAKEN;
+	bool prediction;
+	prediction = get_prediction((TBLOCKS[0]->ctr)[PC%TBLOCK_SIZES[0]], CTR_BITS_T0);
+  PROVIDER_COMPONENT = 0;
+	for(int i = NUM_TBLOCKS-1; i > 0; i--){
+		H1[i] = hash_fcn(PC, HISTORY_LENGTHS[i], H1_FOLD_WIDTH, H1_FOLD_MASK)%(TBLOCK_SIZES[i]);
+		H2[i] = hash_fcn(PC, HISTORY_LENGTHS[i], H2_FOLD_WIDTH, H2_FOLD_MASK)%(0x00000001<<TAG_BITS);		
+		if((TBLOCKS[i]->tag[H1[i]]) == H2[i]){  //Get the prediction if tags match
+			prediction = get_prediction(TBLOCKS[i]->ctr[H1[i]], CTR_BITS);
+      PROVIDER_COMPONENT = i;
+			break;
+		} else {
+			continue;
+		}
+	}
+	return prediction;
 }
 
 void UpdatePredictor_openend(UINT32 PC, bool resolveDir, bool predDir, UINT32 branchTarget) {
-
+	if(PROVIDER_COMPONENT == 0){
+		update_ctr(PROVIDER_COMPONENT,PC%TBLOCK_SIZES[0],CTR_BITS_T0,resolveDir);
+	} else {
+		update_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT],CTR_BITS,resolveDir);
+	}
+	if(predDir == resolveDir){      //ON CORRECT PREDICTIONS
+		incr_u_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT]);
+	} else {			//ON INCORRECT PREDICTIONS
+		if(PROVIDER_COMPONENT == (NUM_TBLOCKS-1)){  //Prediction came from last Tblock
+			
+		} else {  //Prediction came from not last Tblock
+			for(int i = PROVIDER_COMPONENT + 1; i < NUM_TBLOCKS; i++){
+				if((TBLOCKS[i]->u)[H1[i]] == 0){
+					allocate(i,H1[i],resolveDir,H2[i],INIT_USABILITY_LEVEL);
+					break;
+				} else {
+					decr_u_ctr(i,H1[i]);
+				}
+			}
+		}
+	}
+  
+	update_GHR(resolveDir);
 }
 
+void incr_u_ctr(int block_i, int i){
+  int state = TBLOCKS[block_i]->u[i];
+	TBLOCKS[block_i]->u[i] = ((state + 1) > 3) ? 3 : (state + 1);
+}
+
+void decr_u_ctr(int block_i, int i){
+  int state = TBLOCKS[block_i]->u[i];
+	TBLOCKS[block_i]->u[i] = ((state - 1) < 0) ? 0 : (state - 1);
+}
+
+void allocate(int block_i, int index, bool taken, UINT32 tag, int u){
+	TBLOCKS[block_i]->tag[index] = tag;
+	TBLOCKS[block_i]->u[index] = u;
+	TBLOCKS[block_i]->ctr[index] = (taken == TAKEN) ? 4 : 3;
+}
+
+void update_ctr(int block_i, int index, int ctr_bits, bool taken){
+  int max = (1 << ctr_bits)-1;
+	int current = TBLOCKS[block_i]->ctr[index];
+	if(taken == TAKEN){
+		TBLOCKS[block_i]->ctr[index] = ((current + 1) > max) ? max : (current + 1);
+	} else {
+		TBLOCKS[block_i]->ctr[index] = ((current - 1) < 0) ? 0 : (current - 1);
+	}
+}
+bool get_prediction(int ctr, int ctr_bits){
+  int mid = (1 << ctr_bits)/2;
+	if(ctr < mid){
+		return NOT_TAKEN;
+	} else {
+		return TAKEN;
+	}
+}
+
+void update_GHR(bool taken){
+	int GHR_size = GHR_BITS/32;
+	UINT32 msb, old_msb;
+	if(taken == TAKEN){
+		old_msb = 0x00000001;
+	} else {
+		old_msb = 0x00000000;
+	}
+	for(int i = 0; i < GHR_size; i++){
+		msb = (GHR[i] & 0x80000000) >> 31;
+		GHR[i] = GHR[i] << 1;
+		GHR[i] = GHR[i] | old_msb;
+		old_msb = msb;
+	}
+	return;
+}
+
+UINT32 hash_fcn(UINT32 PC, int length, int fold_width, UINT32 fold_mask){
+  UINT32 hash = 0;
+  UINT32 temp;
+  int i = 0;
+  while (length > 0) {
+    if (length > 32) {
+      temp = GHR[i];
+    } else {
+      temp = 0;
+      for (int j = 0; j < length; j++){
+        temp |= GHR[i]&(1<<j);
+      }
+    }
+    while (temp != 0) {
+      hash ^= (temp&fold_mask);
+      temp = temp >> fold_width;
+    }
+    length -= 32;
+    i++;
+  }
+  temp = PC;
+  while (temp != 0) {
+    hash ^= (temp&fold_mask);
+    temp = temp >> fold_width;
+  }
+	return hash;
+}
