@@ -215,17 +215,17 @@ if incorrect prediction:
 /*
 Storage Analysis
 GHR = 256 bits
-T0 = (T0_num_entries * 3)  bits = 1024 * 3  = ***
-Ti = (Ti_num_entries * 13) bits = 1024 * 13 = 13312
-Ti, i = [1,8] --> 13312 * 8 = 106496
-total = 256 + *** + 106496 = *** bits = ***Kbits
+T0 = (T0_num_entries * 3)  bits = 1024 * 3  = 3072
+Ti = (Ti_num_entries * 15) bits = 1024 * 15 = 15,360
+Ti, i = [1,8] --> 15,360 * 8 = 122,880
+total = 256 + 3072 + 122,880 = 126,208 bits = 123.25Kbits
 */
 
 #define NUM_TBLOCKS             9
-#define INIT_CTR_STATE          3 //Weak not taken for a 3 bit counter
-#define INIT_USABILITY_LEVEL    0  //No usefulness for a 2 bit counter
+#define INIT_CTR_STATE          3 
+#define INIT_USABILITY_LEVEL    0  
 #define GHR_BITS                256
-#define TAG_BITS                13
+#define TAG_BITS                10
 #define RESET_PERIOD            500000
 
 // prediction counter ranges
@@ -240,9 +240,9 @@ total = 256 + *** + 106496 = *** bits = ***Kbits
 
 //Data structures
 typedef struct TBlock{
-  int     *ctr;
-  UINT32  *tag; 
-  int     *u;
+  int     *ctr;   // 3 bits
+  UINT32  *tag;   // 10 bits
+  int     *u;     // 2 bits
 } TBlock;
 
 
@@ -263,7 +263,7 @@ UINT32 H1[NUM_TBLOCKS];
 UINT32 H2[NUM_TBLOCKS];
 int HISTORY_LENGTHS[NUM_TBLOCKS]  = {0,2,4,8,16,32,64,128,256};
 int TBLOCK_SIZES[NUM_TBLOCKS]     = {1024,1024,1024,1024,1024,1024,1024,1024,1024};
-int BRANCH_COUNTER = 0;
+// int BRANCH_COUNTER = 0;
 
 void InitPredictor_openend() {
 	TBLOCKS = (TBlock**)malloc(NUM_TBLOCKS*sizeof(TBlock*));
@@ -281,7 +281,7 @@ void InitPredictor_openend() {
 }
 
 bool GetPrediction_openend(UINT32 PC) {
-	BRANCH_COUNTER++;
+	// BRANCH_COUNTER++;
 
 	bool prediction;
 	prediction = get_prediction((TBLOCKS[0]->ctr)[PC%TBLOCK_SIZES[0]], CTR_BITS_T0);
@@ -306,12 +306,10 @@ void UpdatePredictor_openend(UINT32 PC, bool resolveDir, bool predDir, UINT32 br
 	} else {
 		update_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT],CTR_BITS,resolveDir);
 	}
-	if(predDir == resolveDir){      //ON CORRECT PREDICTIONS
+	if(predDir == resolveDir){     
 		incr_u_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT]);
-	} else {			//ON INCORRECT PREDICTIONS
-		if(PROVIDER_COMPONENT == (NUM_TBLOCKS-1)){  //Prediction came from last Tblock
-			
-		} else {  //Prediction came from not last Tblock
+	} else {		
+		if(PROVIDER_COMPONENT != (NUM_TBLOCKS-1)){ //Prediction came from not last Tblock
 			for(int i = PROVIDER_COMPONENT + 1; i < NUM_TBLOCKS; i++){
 				if((TBLOCKS[i]->u)[H1[i]] == 0){
 					allocate(i,H1[i],resolveDir,H2[i],INIT_USABILITY_LEVEL);
