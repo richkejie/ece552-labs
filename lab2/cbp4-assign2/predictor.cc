@@ -221,6 +221,11 @@ Ti, i = [1,8] --> 15,360 * 8 = 122,880
 total = 256 + 3072 + 122,880 = 126,208 bits = 123.25Kbits
 */
 
+/* 
+below is not completely faithful TAGE implementation
+some simplifications were done
+*/
+
 #define NUM_TBLOCKS             9
 #define INIT_CTR_STATE          3 
 #define INIT_USABILITY_LEVEL    0  
@@ -266,14 +271,15 @@ int TBLOCK_SIZES[NUM_TBLOCKS]     = {1024,1024,1024,1024,1024,1024,1024,1024,102
 // int BRANCH_COUNTER = 0;
 
 void InitPredictor_openend() {
+  // allocate memory to simulate T Blocks
 	TBLOCKS = (TBlock**)malloc(NUM_TBLOCKS*sizeof(TBlock*));
 	for(int i = 0; i < NUM_TBLOCKS; i++){
 		TBLOCKS[i] = (TBlock*)malloc(sizeof(TBlock));
-		TBLOCKS[i]->ctr   = (int*)malloc(TBLOCK_SIZES[i]*sizeof(int));
+		TBLOCKS[i]->ctr       = (int*)malloc(TBLOCK_SIZES[i]*sizeof(int));
 		TBLOCKS[i]->tag       = (UINT32*)malloc(TBLOCK_SIZES[i]*sizeof(UINT32));
 		TBLOCKS[i]->u         = (int*)malloc(TBLOCK_SIZES[i]*sizeof(int));
 		for(int j = 0; j < TBLOCK_SIZES[i]; j++){
-			TBLOCKS[i]->ctr[j]  = (int)INIT_CTR_STATE;
+			TBLOCKS[i]->ctr[j]      = (int)INIT_CTR_STATE;
 			TBLOCKS[i]->u[j]        = (int)INIT_USABILITY_LEVEL;
 			TBLOCKS[i]-> tag[j]     = (UINT32)0;
 		}
@@ -284,7 +290,12 @@ bool GetPrediction_openend(UINT32 PC) {
 	// BRANCH_COUNTER++;
 
 	bool prediction;
+  // get base prediction from T0:
 	prediction = get_prediction((TBLOCKS[0]->ctr)[PC%TBLOCK_SIZES[0]], CTR_BITS_T0);
+
+  // compute hashes
+  // then if hash2 hits (matches tag), update prediction
+  // use prediction of tag hitting T Block that uses longest history
   PROVIDER_COMPONENT = 0;
 	for(int i = NUM_TBLOCKS-1; i > 0; i--){
 		H1[i] = hash_fcn(PC, HISTORY_LENGTHS[i], H1_FOLD_WIDTH, H1_FOLD_MASK)%(TBLOCK_SIZES[i]);
@@ -301,15 +312,19 @@ bool GetPrediction_openend(UINT32 PC) {
 }
 
 void UpdatePredictor_openend(UINT32 PC, bool resolveDir, bool predDir, UINT32 branchTarget) {
+  // update prediction counter
 	if(PROVIDER_COMPONENT == 0){
 		update_ctr(PROVIDER_COMPONENT,PC%TBLOCK_SIZES[0],CTR_BITS_T0,resolveDir);
 	} else {
 		update_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT],CTR_BITS,resolveDir);
 	}
+
+  // if prediction correct, increment useful counter, u
 	if(predDir == resolveDir){     
 		incr_u_ctr(PROVIDER_COMPONENT,H1[PROVIDER_COMPONENT]);
 	} else {		
-		if(PROVIDER_COMPONENT != (NUM_TBLOCKS-1)){ //Prediction came from not last Tblock
+  // otherwise, find an entry to allocate, if can't find entry decrement useful counter, u
+		if(PROVIDER_COMPONENT != (NUM_TBLOCKS-1)){ // if prediction came from last T Block, skip
 			for(int i = PROVIDER_COMPONENT + 1; i < NUM_TBLOCKS; i++){
 				if((TBLOCKS[i]->u)[H1[i]] == 0){
 					allocate(i,H1[i],resolveDir,H2[i],INIT_USABILITY_LEVEL);
@@ -321,6 +336,7 @@ void UpdatePredictor_openend(UINT32 PC, bool resolveDir, bool predDir, UINT32 br
 		}
 	}
   
+  // update history
 	update_GHR(resolveDir);
 }
 
@@ -359,6 +375,7 @@ bool get_prediction(int ctr, int ctr_bits){
 }
 
 void update_GHR(bool taken){
+  // simply shift in new outcome into GHR
 	int GHR_size = GHR_BITS/32;
 	UINT32 msb, old_msb;
 	if(taken == TAKEN){
@@ -376,6 +393,7 @@ void update_GHR(bool taken){
 }
 
 UINT32 hash_fcn(UINT32 PC, int length, int fold_width, UINT32 fold_mask){
+  // take fold_width folds of GHR and PC and hash them using XOR
   UINT32 hash = 0;
   UINT32 temp;
   int i = 0;
