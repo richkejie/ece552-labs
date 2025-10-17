@@ -1,6 +1,6 @@
 /*
 	Richard Wu | wuricha8 | 1008078296
-	Christian
+	Christian | vedtofte | 1012872125
 	microbenchmark for ECE552 Lab 2
 
 	compilation:
@@ -87,6 +87,6 @@ int main() {
 
 /*
 Total mispredicts:
-1) 1 + 1 + 10,000,000 + 1,000,000 =~ 11,000,000
-2) ~1,000,000
+1) 2bitsat: 1 + 1 + 10,000,000 + 1,000,000 =~ 11,000,000
+2) 2-level: ~1,000,000
 */
