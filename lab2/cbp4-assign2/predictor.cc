@@ -226,6 +226,8 @@ total = 256 + 512 + 24576 + 81920 = 107264 bits = 104.75Kbits
 /* 
 below is not completely faithful TAGE implementation
 some simplifications were done
+further, some aspects/parameters were changed to optimize
+  wrt to provided suite of benchmarks
 */
 
 #define NUM_TBLOCKS             9
@@ -237,7 +239,7 @@ some simplifications were done
 
 // prediction counter ranges
 #define CTR_BITS                 3 // 3 bits for Ti, i!=0
-#define CTR_BITS_T0              4 // 3 bits for T0
+#define CTR_BITS_T0              4 // 4 bits for T0
 
 // hash parameters
 #define H1_FOLD_WIDTH           13
@@ -367,6 +369,7 @@ void update_ctr(int block_i, int index, int ctr_bits, bool taken){
 		TBLOCKS[block_i]->ctr[index] = ((current - 1) < 0) ? 0 : (current - 1);
 	}
 }
+
 bool get_prediction(int ctr, int ctr_bits){
   int mid = (1 << ctr_bits)/2;
 	if(ctr < mid){
