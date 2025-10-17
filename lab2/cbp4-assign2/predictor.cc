@@ -98,10 +98,6 @@ void InitPredictor_2level() {
   pht_tables_2level = (int**)malloc(NUM_PHT_TABLES*sizeof(int*));
 
   /*
-    TODO: init all BHRs to 0 --- for consistency
-  */
-
-  /*
     pht_tables_2level is a pointer to an array of 8 pointers
     those 8 pointers will each point to the start of a pht table (below)
   */
@@ -161,56 +157,6 @@ void UpdatePredictor_2level(UINT32 PC, bool resolveDir, bool predDir, UINT32 bra
 Storage: max 128Kbits = 128 * 1024 = 131,072 bits
 */
 
-/*
-TAGE implementation:
-1) history lengths:
-    alpha = 2, L(i) = (int)(2^(i-1)*L(1) + 0.5), L(1) = 2 (from paper)
-    0 <= i <= 8: {0, 2, 4, 8, 16, 32, 64, 128, 256}-bit length histories
-2) table sizes:
-    2^0 entries
-    2^2 entries
-    2^4 entries
-    ...
-    2^256 entries (?)
-
-T_Block{
-  ctr: pointer to array of counters --> for ctr prediction
-  tag: pointer to array of tags
-  u: pointer to array of useful counters, u
-}
-
-Notation:
-  provider component: T_Block that gives the prediction
-  alternate prediction (altpred): prediction block if miss on provider component
-  if no hitting component, altpred is default prediction (T0)
-
-3) useful counter, u, 2-bits
-    when altpred != pred:
-      if pred is correct: u++
-      else: u--
-    reset u every <period> branches
-
-4) prediction counter, ctr, 3-bits
-    +1/saturating on correct prediction
-
-if incorrect prediction:
-    update provider component, Ti, pred: ctr--
-    if for Ti, i < M, allocate entry on Tk, k > i:
-      0) read M-i-j u_j useful counters from Tj, i < j < M
-      A) priority for allocation:
-        1) if there is k, s.t. u_k = 0, then Tk is allocated; else
-        2) u from Tj, i < j < M, all decremented, no new entry allocated
-      B) avoiding ping-phenomenon:
-        if both Tj, Tk, j < k, can be allocated (u_j = u_k = 0),
-        then Tj chosen with higher probability than Tk
-          --> implement this using simple linear feedback register
-      C) initializing allocated entry:
-        set prediction ctr to weak correct
-        set u to 0 ('strong not useful')
-
-
-
-*/
 /*
 Storage Analysis
 GHR = 256 bits
