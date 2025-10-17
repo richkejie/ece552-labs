@@ -215,10 +215,10 @@ if incorrect prediction:
 /*
 Storage Analysis
 GHR = 256 bits
-T0 = (T0_num_entries * 3)  bits = 512 * 3  = 1536
+T0 = (T0_num_entries * 3)  bits = 512 * 2  = 1024
 Ti = (Ti_num_entries * 16) bits = 1024 * 16 = 16,384
 Ti, i = [1,8] --> 16,384 * 8 = 131,072
-total = 256 + 1536 + 131,072 = 132,864 bits = 129.75Kbits
+total = 256 + 1024 + 131,072 = 132,352 bits = 129.25Kbits
 */
 
 /* 
@@ -235,7 +235,7 @@ some simplifications were done
 
 // prediction counter ranges
 #define CTR_BITS                 3 // 3 bits for Ti, i!=0
-#define CTR_BITS_T0              3 // 3 bits fot T0
+#define CTR_BITS_T0              2 // 2 bits fot T0
 
 // hash parameters
 #define H1_FOLD_WIDTH           13
