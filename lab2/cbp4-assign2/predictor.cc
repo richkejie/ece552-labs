@@ -215,10 +215,10 @@ if incorrect prediction:
 /*
 Storage Analysis
 GHR = 256 bits
-T0 = (T0_num_entries * 3)  bits = 256 * 3  = 768
+T0 = (T0_num_entries * 3)  bits = 128 * 2  = 256
 Ti = (Ti_num_entries * 16) bits = 1024 * 16 = 16,384
 Ti, i = [1,8] --> 16,384 * 8 = 131,072
-total = 256 + 768 + 131,072 = 132,096 bits = 129Kbits
+total = 256 + 256 + 131,072 = 131,584 bits = 128.5Kbits
 */
 
 /* 
@@ -235,7 +235,7 @@ some simplifications were done
 
 // prediction counter ranges
 #define CTR_BITS                 3 // 3 bits for Ti, i!=0
-#define CTR_BITS_T0              3 // 3 bits fot T0
+#define CTR_BITS_T0              2 // 2 bits for T0
 
 // hash parameters
 #define H1_FOLD_WIDTH           13
@@ -267,7 +267,7 @@ int PROVIDER_COMPONENT;
 UINT32 H1[NUM_TBLOCKS];
 UINT32 H2[NUM_TBLOCKS];
 int HISTORY_LENGTHS[NUM_TBLOCKS]  = {0,2,4,8,16,32,64,128,256};
-int TBLOCK_SIZES[NUM_TBLOCKS]     = {256,1024,1024,1024,1024,1024,1024,1024,1024};
+int TBLOCK_SIZES[NUM_TBLOCKS]     = {128,1024,1024,1024,1024,1024,1024,1024,1024};
 // int BRANCH_COUNTER = 0;
 
 void InitPredictor_openend() {
