@@ -216,9 +216,9 @@ if incorrect prediction:
 Storage Analysis
 GHR = 256 bits
 T0 = (T0_num_entries * 3)  bits = 1024 * 3  = 3072
-Ti = (Ti_num_entries * 15) bits = 1024 * 15 = 15,360
-Ti, i = [1,8] --> 15,360 * 8 = 122,880
-total = 256 + 3072 + 122,880 = 126,208 bits = 123.25Kbits
+Ti = (Ti_num_entries * 16) bits = 1024 * 16 = 16,384
+Ti, i = [1,8] --> 16,384 * 8 = 131,072
+total = 256 + 3072 + 131,072 = 134,400 bits = 131.25Kbits
 */
 
 /* 
@@ -230,7 +230,7 @@ some simplifications were done
 #define INIT_CTR_STATE          3 
 #define INIT_USABILITY_LEVEL    0  
 #define GHR_BITS                256
-#define TAG_BITS                10
+#define TAG_BITS                11
 #define RESET_PERIOD            500000
 
 // prediction counter ranges
@@ -246,9 +246,9 @@ some simplifications were done
 //Data structures
 typedef struct TBlock{
   int     *ctr;   // 3 bits
-  UINT32  *tag;   // 10 bits
+  UINT32  *tag;   // 11 bits
   int     *u;     // 2 bits
-} TBlock;
+} TBlock; // total bits = 3 + 11 + 2 = 16 bits
 
 
 //Function prototypes
