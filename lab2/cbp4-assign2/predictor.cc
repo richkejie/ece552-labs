@@ -124,8 +124,6 @@ bool GetPrediction_2level(UINT32 PC) {
   return state <= WEAK_NT ? NOT_TAKEN : TAKEN;
 }
 
-// #define TAKEN_BIT       0x01
-// #define NOT_TAKEN_BIT   0x00
 void UpdatePredictor_2level(UINT32 PC, bool resolveDir, bool predDir, UINT32 branchTarget) {
   // get indices, tables, state
   int pht_index = (int)(PC & (UINT32)PHT_INDEX_MASK);
