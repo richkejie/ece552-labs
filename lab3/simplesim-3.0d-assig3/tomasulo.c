@@ -23,7 +23,7 @@
 
 /* PARAMETERS OF THE TOMASULO'S ALGORITHM */
 
-#define INSTR_QUEUE_SIZE         10
+#define INSTR_QUEUE_SIZE         16
 
 #define RESERV_INT_SIZE    4
 #define RESERV_FP_SIZE     2
@@ -134,9 +134,11 @@ cdb_t CDB;
 /* ECE552 Assignment 3 - BEGIN CODE */
 // helper function prototypes
 bool h_IFQ_full();
+bool h_IFQ_empty();
 void h_IFQ_push(instruction_t*);
 /* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Checks if simulation is done by finishing the very last instruction
@@ -147,11 +149,23 @@ void h_IFQ_push(instruction_t*);
  * 	True: if simulation is finished
  */
 static bool is_simulation_done(counter_t sim_insn) {
+  if (fetch_index < sim_insn) return false; // have not fetched the last instr yet
+  if (!h_IFQ_empty()) return false; // have not handled all instrs in IFQ yet
 
-  /* ECE552: YOUR CODE GOES HERE */
+  // if RS not empty or FU not empty (i.e. instr is executing), need to continue
+  for (int i = 0; i < RESERV_INT_SIZE; i++) {
+    if (reservINT[i].busy || reservINT[i].executing) return false;
+  }
+  for (int i = 0; i < RESERV_FP_SIZE; i++) {
+    if (reservFP[i].busy || reservFP[i].executing) return false;
+  }
 
-  return true; //ECE552: you can change this as needed; we've added this so the code provided to you compiles
+  // if CDB not empty, need to continue
+  if (CDB.T != -1) return false;
+
+  return true;
 }
+/* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 /* 
@@ -267,7 +281,11 @@ void fetch(instruction_trace_t* trace) {
  * 	None
  */
 void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
-  if (!h_IFQ_full()) fetch(trace);
+  if (!h_IFQ_full()) {
+    printf("IFQ not full; IFQ_instr_count: %d; fetching...\n", IFQ_instr_count); // to remove
+    fetch(trace);
+    printf("fetched! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail); // to remove
+  }
 }
 /* ECE552 Assignment 3 - END CODE */
 
@@ -338,8 +356,11 @@ counter_t runTomasulo(instruction_trace_t* trace)
   CDB.T     = -1;
   CDB.instr = NULL;
   
+  printf("structures initialized!\n"); // to remove
+
   int cycle = 1;
   while (true) {
+    printf("cycle %d:\n", cycle); // to remove
 
     CDB_To_retire(cycle);
     execute_To_CDB(cycle);
@@ -350,6 +371,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
     cycle++;
 
     if (is_simulation_done(sim_num_insn)) break;
+    if (cycle > 100) break; // to remove
   }
   
   return cycle;
@@ -359,17 +381,14 @@ counter_t runTomasulo(instruction_trace_t* trace)
 /* ECE552 Assignment 3 - BEGIN CODE */
 // this section contains helper functions
 bool h_IFQ_full() {
-  if (IFQ_head == IFQ_tail) return false; // IFQ is empty
-
-  int head_minus_one;
-  if (IFQ_head == 0) {
-    head_minus_one = INSTR_QUEUE_SIZE-1;
-  } else {
-    head_minus_one = IFQ_head - 1;
-  }
-
-  if (IFQ_tail == head_minus_one) return true; // IFQ is full
-  return false; // otherwise not full
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
+  assert (0 <= IFQ_instr_count);
+  return IFQ_instr_count >= INSTR_QUEUE_SIZE;
+}
+bool h_IFQ_empty() {
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
+  assert (0 <= IFQ_instr_count);
+  return IFQ_instr_count == 0;
 }
 
 void h_IFQ_push(instruction_t* instr) {
