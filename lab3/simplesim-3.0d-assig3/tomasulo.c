@@ -80,12 +80,14 @@
 /* VARIABLES */
 
 //instruction queue for tomasulo
-static instruction_t* instr_queue[INSTR_QUEUE_SIZE];
+static instruction_t* IFQ[INSTR_QUEUE_SIZE];
+// if head == tail: IFQ empty
+// if tail 1 before head: IFQ full
+// implementing a circular buffer
+int IFQ_head = 0;
+int IFQ_tail = 0;
 //number of instructions in the instruction queue
-static int instr_queue_size = 0;
-
-//common data bus
-static instruction_t* commonDataBus = NULL;
+static int IFQ_instr_count = 0;
 
 //the index of the last instruction fetched
 static int fetch_index = 0;
@@ -127,6 +129,12 @@ typedef struct COMMON_DATA_BUS {
 
 cdb_t CDB;
 
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
+// helper function prototypes
+bool h_IFQ_full();
+void h_IFQ_push(instruction_t*);
 /* ECE552 Assignment 3 - END CODE */
 
 /* 
@@ -225,6 +233,7 @@ void dispatch_To_issue(int current_cycle) {
   /* ECE552: YOUR CODE GOES HERE */
 }
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Grabs an instruction from the instruction trace (if possible)
@@ -234,10 +243,20 @@ void dispatch_To_issue(int current_cycle) {
  * 	None
  */
 void fetch(instruction_trace_t* trace) {
+  instruction_t* fetched_instr;
+  do {
+    fetched_instr = get_instr(trace, ++fetch_index); // get_instr stated in instr.h
+                                                     // pre-increment fetch_index bc it 
+                                                     // is index of last fetched isntr
+  } while (IS_TRAP(fetched_instr->op)); // skip trap instructions
 
-  /* ECE552: YOUR CODE GOES HERE */
+  if (fetch_index <= sim_num_insn) { // only fetch if within limit of instrs
+    h_IFQ_push(fetched_instr);
+  }
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Calls fetch and dispatches an instruction at the same cycle (if possible)
@@ -248,11 +267,9 @@ void fetch(instruction_trace_t* trace) {
  * 	None
  */
 void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
-
-  fetch(trace);
-
-  /* ECE552: YOUR CODE GOES HERE */
+  if (!h_IFQ_full()) fetch(trace);
 }
+/* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 /* 
@@ -270,7 +287,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
   //initialize instruction queue
   int i;
   for (i = 0; i < INSTR_QUEUE_SIZE; i++) {
-    instr_queue[i] = NULL;
+    IFQ[i] = NULL;
   }
 
   //initialize reservation stations
@@ -337,4 +354,34 @@ counter_t runTomasulo(instruction_trace_t* trace)
   
   return cycle;
 }
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
+// this section contains helper functions
+bool h_IFQ_full() {
+  if (IFQ_head == IFQ_tail) return false; // IFQ is empty
+
+  int head_minus_one;
+  if (IFQ_head == 0) {
+    head_minus_one = INSTR_QUEUE_SIZE-1;
+  } else {
+    head_minus_one = IFQ_head - 1;
+  }
+
+  if (IFQ_tail == head_minus_one) return true; // IFQ is full
+  return false; // otherwise not full
+}
+
+void h_IFQ_push(instruction_t* instr) {
+  assert (!h_IFQ_full());
+
+  IFQ[IFQ_tail] = instr;
+  if (IFQ_tail == INSTR_QUEUE_SIZE-1) {
+    IFQ_tail = 0;
+  } else {
+    IFQ_tail++;
+  }
+  IFQ_instr_count++;
+}
+
 /* ECE552 Assignment 3 - END CODE */
