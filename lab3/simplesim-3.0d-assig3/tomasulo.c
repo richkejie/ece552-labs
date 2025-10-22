@@ -145,6 +145,7 @@ static bool is_simulation_done(counter_t sim_insn) {
   return true; //ECE552: you can change this as needed; we've added this so the code provided to you compiles
 }
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Retires the instruction from writing to the Common Data Bus
@@ -154,10 +155,32 @@ static bool is_simulation_done(counter_t sim_insn) {
  * 	None
  */
 void CDB_To_retire(int current_cycle) {
+  if (CDB.instr != NULL) {
+    CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB
+  }
 
-  /* ECE552: YOUR CODE GOES HERE */
+  // broadcast to reservation stations
+  for (int i = 0; i < RESERV_INT_SIZE; i++) {
+    if (reservINT[i].T0 == CDB.T) reservINT[i].T0 = -1;
+    if (reservINT[i].T1 == CDB.T) reservINT[i].T1 = -1;
+    if (reservINT[i].T2 == CDB.T) reservINT[i].T2 = -1;
+  }
+  for (int i = 0; i < RESERV_FP_SIZE; i++) {
+    if (reservFP[i].T0 == CDB.T) reservFP[i].T0 = -1;
+    if (reservFP[i].T1 == CDB.T) reservFP[i].T1 = -1;
+    if (reservFP[i].T2 == CDB.T) reservFP[i].T2 = -1;
+  }
 
+  // broadcast to map table
+  for (int i = 0; i < MD_TOTAL_REGS; i++) {
+    if (map_table[i] == CDB.T) map_table[i] = -1;
+  }
+
+  // clear CDB
+  CDB.T     = -1;
+  CDB.instr = NULL;
 }
+/* ECE552 Assignment 3 - END CODE */
 
 
 /* 
@@ -301,7 +324,6 @@ counter_t runTomasulo(instruction_trace_t* trace)
   int cycle = 1;
   while (true) {
 
-    /* ECE552: YOUR CODE GOES HERE */
     CDB_To_retire(cycle);
     execute_To_CDB(cycle);
     issue_To_execute(cycle);
