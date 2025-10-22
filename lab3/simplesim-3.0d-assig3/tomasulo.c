@@ -84,28 +84,20 @@ static instruction_t* instr_queue[INSTR_QUEUE_SIZE];
 //number of instructions in the instruction queue
 static int instr_queue_size = 0;
 
-// //reservation stations (each reservation station entry contains a pointer to an instruction)
-// static instruction_t* reservINT[RESERV_INT_SIZE];
-// static instruction_t* reservFP[RESERV_FP_SIZE];
-
-// //functional units
-// static instruction_t* fuINT[FU_INT_SIZE];
-// static instruction_t* fuFP[FU_FP_SIZE];
-
 //common data bus
 static instruction_t* commonDataBus = NULL;
-
-//The map table keeps track of which instruction produces the value for each register
-static instruction_t* map_table[MD_TOTAL_REGS];
 
 //the index of the last instruction fetched
 static int fetch_index = 0;
 
+/* MAP TABLE */
+int map_table[MD_TOTAL_REGS];
+
 /* FUNCTIONAL UNITS */
 typedef struct FUNCTIONAL_UNIT {
-    instruction_t*    instr;
-    int               cycles_to_completion;
-    int               rs_num; // reservation station entry number
+  instruction_t*    instr;
+  int               cycles_to_completion;
+  int               rs_num; // reservation station entry number
 } func_unit_t;
 
 func_unit_t fuINT[FU_INT_SIZE];
@@ -113,19 +105,27 @@ func_unit_t fuFP[FU_FP_SIZE];
 
 /* RESERVATION STATIONS */
 typedef struct RESERVATION_STATION {
-    bool              busy;
-    bool              executing;
-    instruction_t*    instr;
-    int               R0;
-    int               R1;
-    int               T0;
-    int               T1;
-    int               T2;
-    int               inst_cycle;
+  bool              busy;
+  bool              executing;
+  instruction_t*    instr;
+  int               R0;
+  int               R1;
+  int               T0;
+  int               T1;
+  int               T2;
+  int               inst_cycle;
 } res_stat_t;
 
 res_stat_t reservINT[RESERV_INT_SIZE];
 res_stat_t reservFP[RESERV_FP_SIZE];
+
+/* COMMON DATA BUS */
+typedef struct COMMON_DATA_BUS {
+  instruction_t*    instr;
+  int               T; // tag
+} cdb_t;
+
+cdb_t CDB;
 
 /* ECE552 Assignment 3 - END CODE */
 
@@ -252,27 +252,27 @@ counter_t runTomasulo(instruction_trace_t* trace)
 
   //initialize reservation stations
   for (i = 0; i < RESERV_INT_SIZE; i++) {
-      reservINT[i].busy         = false;
-      reservINT[i].executing    = false;
-      reservINT[i].instr        = NULL;
-      reservINT[i].R0           = -1;
-      reservINT[i].R1           = -1;
-      reservINT[i].T0           = -1;
-      reservINT[i].T1           = -1;
-      reservINT[i].T2           = -1;
-      reservINT[i].inst_cycle   = 0;
+    reservINT[i].busy         = false;
+    reservINT[i].executing    = false;
+    reservINT[i].instr        = NULL;
+    reservINT[i].R0           = -1;
+    reservINT[i].R1           = -1;
+    reservINT[i].T0           = -1;
+    reservINT[i].T1           = -1;
+    reservINT[i].T2           = -1;
+    reservINT[i].inst_cycle   = 0;
   }
 
   for(i = 0; i < RESERV_FP_SIZE; i++) {
-      reservFP[i].busy          = false;
-      reservFP[i].executing     = false;
-      reservFP[i].instr         = NULL;
-      reservFP[i].R0            = -1;
-      reservFP[i].R1            = -1;
-      reservFP[i].T0            = -1;
-      reservFP[i].T1            = -1;
-      reservFP[i].T2            = -1;
-      reservFP[i].inst_cycle    = 0;
+    reservFP[i].busy          = false;
+    reservFP[i].executing     = false;
+    reservFP[i].instr         = NULL;
+    reservFP[i].R0            = -1;
+    reservFP[i].R1            = -1;
+    reservFP[i].T0            = -1;
+    reservFP[i].T1            = -1;
+    reservFP[i].T2            = -1;
+    reservFP[i].inst_cycle    = 0;
   }
 
   //initialize functional units
@@ -291,18 +291,26 @@ counter_t runTomasulo(instruction_trace_t* trace)
   //initialize map_table to no producers
   int reg;
   for (reg = 0; reg < MD_TOTAL_REGS; reg++) {
-    map_table[reg] = NULL;
+    map_table[reg] = -1;
   }
+
+  // initialize the CDB
+  CDB.T     = -1;
+  CDB.instr = NULL;
   
   int cycle = 1;
   while (true) {
 
-     /* ECE552: YOUR CODE GOES HERE */
+    /* ECE552: YOUR CODE GOES HERE */
+    CDB_To_retire(cycle);
+    execute_To_CDB(cycle);
+    issue_To_execute(cycle);
+    dispatch_To_issue(cycle);
+    fetch_To_dispatch(trace, cycle);
 
-     cycle++;
+    cycle++;
 
-     if (is_simulation_done(sim_num_insn))
-        break;
+    if (is_simulation_done(sim_num_insn)) break;
   }
   
   return cycle;
