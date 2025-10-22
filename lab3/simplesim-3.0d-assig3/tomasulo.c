@@ -88,9 +88,9 @@ static int instr_queue_size = 0;
 // static instruction_t* reservINT[RESERV_INT_SIZE];
 // static instruction_t* reservFP[RESERV_FP_SIZE];
 
-//functional units
-static instruction_t* fuINT[FU_INT_SIZE];
-static instruction_t* fuFP[FU_FP_SIZE];
+// //functional units
+// static instruction_t* fuINT[FU_INT_SIZE];
+// static instruction_t* fuFP[FU_FP_SIZE];
 
 //common data bus
 static instruction_t* commonDataBus = NULL;
@@ -102,7 +102,14 @@ static instruction_t* map_table[MD_TOTAL_REGS];
 static int fetch_index = 0;
 
 /* FUNCTIONAL UNITS */
+typedef struct FUNCTIONAL_UNIT {
+    instruction_t*    instr;
+    int               cycles_to_completion;
+    int               rs_num; // reservation station entry number
+} func_unit_t;
 
+func_unit_t fuINT[FU_INT_SIZE];
+func_unit_t fuFP[FU_FP_SIZE];
 
 /* RESERVATION STATIONS */
 typedef struct RESERVATION_STATION {
@@ -270,11 +277,15 @@ counter_t runTomasulo(instruction_trace_t* trace)
 
   //initialize functional units
   for (i = 0; i < FU_INT_SIZE; i++) {
-    fuINT[i] = NULL;
+    fuINT[i].instr                  = NULL;
+    fuINT[i].cycles_to_completion   = -1;
+    fuINT[i].rs_num                 = -1;
   }
 
   for (i = 0; i < FU_FP_SIZE; i++) {
-    fuFP[i] = NULL;
+    fuFP[i].instr                   = NULL;
+    fuFP[i].cycles_to_completion    = -1;
+    fuFP[i].rs_num                  = -1;
   }
 
   //initialize map_table to no producers
