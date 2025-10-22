@@ -75,6 +75,8 @@
   md_print_insn(instr->inst, instr->pc, out); \
   myfprintf(stdout, "(%d)\n",instr->index);
 
+
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* VARIABLES */
 
 //instruction queue for tomasulo
@@ -82,9 +84,9 @@ static instruction_t* instr_queue[INSTR_QUEUE_SIZE];
 //number of instructions in the instruction queue
 static int instr_queue_size = 0;
 
-//reservation stations (each reservation station entry contains a pointer to an instruction)
-static instruction_t* reservINT[RESERV_INT_SIZE];
-static instruction_t* reservFP[RESERV_FP_SIZE];
+// //reservation stations (each reservation station entry contains a pointer to an instruction)
+// static instruction_t* reservINT[RESERV_INT_SIZE];
+// static instruction_t* reservFP[RESERV_FP_SIZE];
 
 //functional units
 static instruction_t* fuINT[FU_INT_SIZE];
@@ -103,7 +105,22 @@ static int fetch_index = 0;
 
 
 /* RESERVATION STATIONS */
+typedef struct RESERVATION_STATION {
+    bool              busy;
+    bool              executing;
+    instruction_t*    instr;
+    int               R0;
+    int               R1;
+    int               T0;
+    int               T1;
+    int               T2;
+    int               inst_cycle;
+} res_stat_t;
 
+res_stat_t reservINT[RESERV_INT_SIZE];
+res_stat_t reservFP[RESERV_FP_SIZE];
+
+/* ECE552 Assignment 3 - END CODE */
 
 /* 
  * Description: 
@@ -207,6 +224,7 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
   /* ECE552: YOUR CODE GOES HERE */
 }
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Performs a cycle-by-cycle simulation of the 4-stage pipeline
@@ -227,11 +245,27 @@ counter_t runTomasulo(instruction_trace_t* trace)
 
   //initialize reservation stations
   for (i = 0; i < RESERV_INT_SIZE; i++) {
-      reservINT[i] = NULL;
+      reservINT[i].busy         = false;
+      reservINT[i].executing    = false;
+      reservINT[i].instr        = NULL;
+      reservINT[i].R0           = -1;
+      reservINT[i].R1           = -1;
+      reservINT[i].T0           = -1;
+      reservINT[i].T1           = -1;
+      reservINT[i].T2           = -1;
+      reservINT[i].inst_cycle   = 0;
   }
 
   for(i = 0; i < RESERV_FP_SIZE; i++) {
-      reservFP[i] = NULL;
+      reservFP[i].busy          = false;
+      reservFP[i].executing     = false;
+      reservFP[i].instr         = NULL;
+      reservFP[i].R0            = -1;
+      reservFP[i].R1            = -1;
+      reservFP[i].T0            = -1;
+      reservFP[i].T1            = -1;
+      reservFP[i].T2            = -1;
+      reservFP[i].inst_cycle    = 0;
   }
 
   //initialize functional units
@@ -262,3 +296,4 @@ counter_t runTomasulo(instruction_trace_t* trace)
   
   return cycle;
 }
+/* ECE552 Assignment 3 - END CODE */
