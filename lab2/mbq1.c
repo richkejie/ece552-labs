@@ -65,8 +65,6 @@ int main() {
             In total it should be a lw,slt and bne
         */
 
-		
-
 		/*
 			loop condition assembly (from objdump):
 			set k to 0 
@@ -106,7 +104,6 @@ int main() {
 			go back to start of inner loop
 				j 400318 <main+0x128>
 		*/
-
 		/*
 			increment iterator i
 				addiu $3,$3,1
@@ -133,11 +130,6 @@ int main() {
 				j 400408 <main+0x218>
 		*/
 
-
-        /* 
-            Christian
-            Trying to test for missed branch predictions here by having another smaller for loop inside this loop. 
-        */
         /* 
             Should be slti and one branch instruction and then a lw and 3 ALU instructions and finally a jump instruction 
             for a total of 7 instructions per iteration of the inner loop. 
@@ -161,13 +153,11 @@ int main() {
 			otherwise, jump to after loop, only executed on last instruction
 				j 4003f8 <main+0x208>
 		*/
-
         for (k = 0; k<3; k++){
             A = *D;
 		    B = A + 1;
 		    A++;
         }
-
 		/*
 			A = *D;
 				lw $5,0($8)
@@ -182,7 +172,6 @@ int main() {
 			go back to start of inner loop
 				j 4003b8 <main+0x1c8>
 		*/
-
 		/*
 			increment iterator i
 				addiu $3,$3,1
@@ -207,11 +196,6 @@ int main() {
 				j 400488 <main+0x298>
 		*/
 
-
-        /* 
-            Christian
-            Trying to test for missed branch predictions here by having another smaller for loop inside this loop. 
-        */
         /* 
             Should be slti and one branch instruction and then a lw and 3 ALU instructions and finally a jump instruction 
             for a total of 10 instructions per iteration of the inner loop. 
@@ -222,9 +206,6 @@ int main() {
             misspredictions while the predictor is "training".
             For the 2-bit counter assuming it defaults to NT then it should misspredict the first two taken branches, and after that only misspredict the not taken branches
             In total it should be a lw,slt and bne        */
-
-
-
 
 		/*
 			loop condition assembly (from objdump):
@@ -237,31 +218,22 @@ int main() {
 			otherwise, jump to after loop, only executed on last instruction
 				j 400478 <main+0x288>
 		*/
-
-
-
-
         for (k = 0; k<3; k++){
             A = *D;
 		    A++;
         }
-
         /*
 			A = *D;
 				lw $5,0($8)
 			A++;
 				addiu $5,$5,1
 		*/
-
-
-
 		/*
 			increment iterator i
 				addiu $4,$4,1
 			go back to start of inner loop
 				j 400440 <main+0x250>
 		*/
-
 		/*
 			increment iterator i
 				addiu $3,$3,1
@@ -286,12 +258,6 @@ int main() {
 				j 4004a0 <main+0x2b0>
 		*/
 
-
-
-        /* 
-            Christian
-            Trying to test for missed branch predictions here by having another smaller for loop inside this loop. 
-        */
         /* 
             Should be slti and one branch instruction and 2 ALU instructions and finally a jump instruction 
             for a total of 6 instructions per iteration of the inner loop. 
@@ -304,8 +270,6 @@ int main() {
             In total it should be a lw,slt and bne
         */
 
-
-
 		/*
 			loop condition assembly (from objdump):
 			set k to 0
@@ -317,9 +281,6 @@ int main() {
 			otherwise, jump to after loop, only executed on last instruction
 				j 4004f0 <main+0x300>
 		*/
-
-
-
         for (k = 0; k<3; k++){
             X = 0;
         }
@@ -333,7 +294,6 @@ int main() {
 			go back to start of inner loop
 				j 4004c0 <main+0x2d0>
 		*/
-
 		/*
 			increment iterator i
 				addiu $3,$3,1

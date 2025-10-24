@@ -105,12 +105,12 @@ int map_table[MD_TOTAL_REGS];
 /* FUNCTIONAL UNITS */
 typedef struct FUNCTIONAL_UNIT {
   instruction_t*    instr;
-  int               cycles_to_completion;
+  int               cycles_to_completion; 
   int               rs_num; // reservation station entry number
 } func_unit_t;
 
 func_unit_t fuINT[FU_INT_SIZE];
-func_unit_t fuFP[FU_FP_SIZE];
+func_unit_t fuFP[FU_FP_SIZE]; // kinda overkiil to make an array with a single entry imo - Christian
 
 /* RESERVATION STATIONS */
 typedef struct RESERVATION_STATION {
@@ -186,11 +186,11 @@ static bool is_simulation_done(counter_t sim_insn) {
  */
 void CDB_To_retire(int current_cycle) {
   if (CDB.instr != NULL) {
-    CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB
+    CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB // I've understood the assignment to be different than this - Christian
   }
 
   // broadcast to reservation stations
-  for (int i = 0; i < RESERV_INT_SIZE; i++) {
+  for (int i = 0; i < RESERV_INT_SIZE; i++) { // doesnt this segfault if we don't have it filled, or is it init at some value far all indeces? - Christian
     for (int j = 0; j < NUM_INPUT_REGS; j++) {
       if (reservINT[i].T[j] == CDB.T) reservINT[i].T[j] = -1;
     }
@@ -225,6 +225,9 @@ void execute_To_CDB(int current_cycle) {
 
   /* ECE552: YOUR CODE GOES HERE */
 
+  /* ECE552 Assignment 3 - BEGIN CODE */
+  /* ECE552 Assignment 3 - END CODE */
+
 }
 
 /* 
@@ -237,9 +240,68 @@ void execute_To_CDB(int current_cycle) {
  * Returns:
  * 	None
  */
-void issue_To_execute(int current_cycle) {
+void issue_To_execute(int current_cycle) { // I haven't figured out if we can only send one int and one fp to exec per cycle or as many as there are FU ready - Christian
 
   /* ECE552: YOUR CODE GOES HERE */
+
+  /* ECE552 Assignment 3 - BEGIN CODE */
+  bool rs_entry_ready = true;
+  int valid_fu_index;
+  for (int k = 0; k>FU_INT_SIZE; k++){
+    if (fuINT[k].cycles_to_completion<=0) { // Check for a FU that is free, might need to be == instead of <= - Christian
+      valid_fu_index = k;
+      goto res_int; 
+    }
+  }
+  goto res_fp; // goto kinda scares me - Christian
+  
+  res_int:
+  for (int i = 0; i < RESERV_INT_SIZE; i++) { // Considering if we also need Head and Tail for reservINT[] - Christian
+    rs_entry_ready = true;
+    instruction_t *int_insn = reservINT[i].instr;
+    for (int j = 0; j < NUM_INPUT_REGS; j++) { 
+      if (int_insn->r_in[j] != -1) {
+        rs_entry_ready = false; // If any one of the values aren't ready set false and break - Christian
+        break;
+      }
+    }
+    if (rs_entry_ready) {
+      fuINT[valid_fu_index].instr=int_insn; 
+      fuINT[valid_fu_index].cycles_to_completion = 5;
+      fuINT[valid_fu_index].rs_num=i;
+      break; // break since we found a valid insn to exec - Christian
+    }
+  }
+
+  res_fp:
+  for (int i = 0; i < RESERV_FP_SIZE; i++) {
+    if (fuFP[0].cycles_to_completion>0) break; // fuFP not ready, maybe need to be >= depending on implementation - Christian
+    rs_entry_ready = true;
+    instruction_t *fp_insn = reservFP[0].instr;
+    for (int j = 0; j < NUM_INPUT_REGS; j++) { 
+      if (fp_insn->r_in[j] != -1) {
+        rs_entry_ready = false; // If any one of the values aren't ready set false and break - Christian
+        break;
+      }
+    }
+
+    if (rs_entry_ready) {
+      fuFP[0].instr=fp_insn; // index needs to be rotated in a thoughtful way - Christian
+      fuFP[0].cycles_to_completion = 7;
+      fuFP[0].rs_num=i;
+      break; // break since we found a valid insn to exec - Christian
+    }
+  }
+
+
+
+
+
+
+
+
+
+  /* ECE552 Assignment 3 - END CODE */
 }
 
 /* ECE552 Assignment 3 - BEGIN CODE */
@@ -260,9 +322,9 @@ void dispatch_To_issue(int current_cycle) {
     printf("Dispatching...\n");
   }
 
-  instruction_t* dispatched_instr = h_IFQ_head();
+  instruction_t* dispatched_instr = h_IFQ_head(); // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
   assert (dispatched_instr != NULL);
-  dispatched_instr->tom_dispatch_cycle++;
+  dispatched_instr->tom_dispatch_cycle++; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
 
   // conditional and unconditional branches do not get dispatched to RS
   // so simply pop from IFQ and skip
@@ -282,7 +344,7 @@ void dispatch_To_issue(int current_cycle) {
         // allocate this entry, then stop
         printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
         h_alloc_rs_entry(&reservINT[i], i, dispatched_instr, current_cycle);
-        h_IFQ_pop();
+        h_IFQ_pop(); // Why does this return a value, Void seems more appropriate considering how it is being used currently - Christian
         printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
         found_available_rs_entry = true;
         break;
@@ -447,9 +509,9 @@ counter_t runTomasulo(instruction_trace_t* trace)
 /* ECE552 Assignment 3 - BEGIN CODE */
 // this section contains helper functions
 bool h_IFQ_full() {
-  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE); // I dont get this? Christian
   assert (0 <= IFQ_instr_count);
-  return IFQ_instr_count >= INSTR_QUEUE_SIZE;
+  return IFQ_instr_count >= INSTR_QUEUE_SIZE; // If assert is to makes sense this should be == and not >=
 }
 bool h_IFQ_empty() {
   assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
@@ -494,7 +556,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   res_stat_entry->instr = instr;
 
   // T0, T1, T2: input registers
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
     if (instr->r_in[i] != -1) {
       res_stat_entry->T[i] = map_table[instr->r_in[i]];
     } else {
@@ -505,7 +567,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   // R0, R1: output registers (stores don't have output registers)
   // also update map table
   if (!IS_STORE(instr->op)) {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) { // should probably use NUM_OUTPUT_REGS instead of 2 - Christian
       if (instr->r_out[i] != -1) {
         res_stat_entry->R[i] = instr->r_out[i];
         map_table[instr->r_out[i]] = res_stat_index;
