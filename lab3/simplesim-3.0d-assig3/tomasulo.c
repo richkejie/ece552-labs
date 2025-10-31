@@ -122,8 +122,7 @@ typedef struct RESERVATION_STATION {
   int               inst_cycle;
 } res_stat_t;
 
-res_stat_t reservINT[RESERV_INT_SIZE];
-res_stat_t reservFP[RESERV_FP_SIZE];
+res_stat_t reserv_stats[RESERV_INT_SIZE + RESERV_FP_SIZE];
 
 /* COMMON DATA BUS */
 typedef struct COMMON_DATA_BUS {
@@ -161,11 +160,8 @@ static bool is_simulation_done(counter_t sim_insn) {
   if (!h_IFQ_empty()) return false; // have not handled all instrs in IFQ yet
 
   // if RS not empty or FU not empty (i.e. instr is executing), need to continue
-  for (int i = 0; i < RESERV_INT_SIZE; i++) {
-    if (reservINT[i].busy || reservINT[i].executing) return false;
-  }
-  for (int i = 0; i < RESERV_FP_SIZE; i++) {
-    if (reservFP[i].busy || reservFP[i].executing) return false;
+  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
+    if (reserv_stats[i].busy || reserv_stats[i].executing) return false;
   }
 
   // if CDB not empty, need to continue
@@ -190,14 +186,9 @@ void CDB_To_retire(int current_cycle) {
   }
 
   // broadcast to reservation stations
-  for (int i = 0; i < RESERV_INT_SIZE; i++) {
+  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE  ; i++) {
     for (int j = 0; j < NUM_INPUT_REGS; j++) {
-      if (reservINT[i].T[j] == CDB.T) reservINT[i].T[j] = -1;
-    }
-  }
-  for (int i = 0; i < RESERV_FP_SIZE; i++) {
-    for (int j = 0; j < NUM_INPUT_REGS; j++) {
-      if (reservFP[i].T[j] == CDB.T) reservFP[i].T[j] = -1;
+      if (reserv_stats[i].T[j] == CDB.T) reserv_stats[i].T[j] = -1;
     }
   }
 
@@ -274,36 +265,30 @@ void dispatch_To_issue(int current_cycle) {
 
   // move into appropriate RS
   bool found_available_rs_entry = false;
+  int start_idx = 0;
+  int end_idx = 0;
   if (USES_INT_FU(dispatched_instr->op)) {
     printf("dispatched instr uses INT FU, searching for available RS entry...\n");
-    // look for available RS
-    for (int i = 0; i < RESERV_INT_SIZE; i++) {
-      if (!reservINT[i].busy) { // this entry is not allocated!
-        // allocate this entry, then stop
-        printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
-        h_alloc_rs_entry(&reservINT[i], i, dispatched_instr, current_cycle);
-        h_IFQ_pop();
-        printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
-        found_available_rs_entry = true;
-        break;
-      }
-    }
+    start_idx = 0;
+    end_idx = RESERV_INT_SIZE;
   } else if (USES_FP_FU(dispatched_instr->op)) {
     printf("dispatched instr uses FP FU, searching for available RS entry...\n");
-    for (int i = 0; i < RESERV_FP_SIZE; i++) {
-      if (!reservFP[i].busy) {
-        printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
-        h_alloc_rs_entry(&reservFP[i], i, dispatched_instr, current_cycle);
-        h_IFQ_pop();
-        printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
-        found_available_rs_entry = true;
-        break;
-      }
-    }
+    start_idx = RESERV_INT_SIZE;
+    end_idx = RESERV_INT_SIZE + RESERV_FP_SIZE;
   } else {
     printf("ERROR: dispatched instr uses does not INT nor FP FU\n");
   }
-  if (!found_available_rs_entry) printf("no available RS entry.\n");
+
+  for (int i = start_idx; i < end_idx; i++) {
+    if (!reserv_stats[i].busy) {
+      printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
+      h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle);
+      h_IFQ_pop();
+      printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
+      found_available_rs_entry = true;
+      break;
+    }
+  }
 }
 /* ECE552 Assignment 3 - END CODE */
 
@@ -373,30 +358,17 @@ counter_t runTomasulo(instruction_trace_t* trace)
   }
 
   //initialize reservation stations
-  for (i = 0; i < RESERV_INT_SIZE; i++) {
-    reservINT[i].busy         = false;
-    reservINT[i].executing    = false;
-    reservINT[i].instr        = NULL;
+  for (i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
+    reserv_stats[i].busy          = false;
+    reserv_stats[i].executing     = false;
+    reserv_stats[i].instr         = NULL;
     for (int j = 0; j < NUM_OUTPUT_REGS; j++) {
-      reservINT[i].R[j]           = -1;
+      reserv_stats[i].R[j]        = -1;
     }
     for (int j = 0; j < NUM_INPUT_REGS; j++) {
-      reservINT[i].T[j]           = -1;
+      reserv_stats[i].T[j]        = -1;
     }
-    reservINT[i].inst_cycle   = 0;
-  }
-
-  for(i = 0; i < RESERV_FP_SIZE; i++) {
-    reservFP[i].busy          = false;
-    reservFP[i].executing     = false;
-    reservFP[i].instr         = NULL;
-    for (int j = 0; j < NUM_OUTPUT_REGS; j++) {
-      reservFP[i].R[j]           = -1;
-    }
-    for (int j = 0; j < NUM_INPUT_REGS; j++) {
-      reservFP[i].T[j]           = -1;
-    }
-    reservFP[i].inst_cycle    = 0;
+    reserv_stats[i].inst_cycle    = 0;
   }
 
   //initialize functional units
@@ -422,12 +394,11 @@ counter_t runTomasulo(instruction_trace_t* trace)
   CDB.T     = -1;
   CDB.instr = NULL;
   
-  printf("structures initialized!\n"); // to remove
+  printf("structures initialized!\n\n\n");
 
   int cycle = 1;
   while (true) {
-    printf("cycle %d:\n", cycle); // to remove
-
+    printf("\ncycle %d:\n", cycle);
     CDB_To_retire(cycle);
     execute_To_CDB(cycle);
     issue_To_execute(cycle);
