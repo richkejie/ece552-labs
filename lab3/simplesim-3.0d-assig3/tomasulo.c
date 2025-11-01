@@ -109,8 +109,7 @@ typedef struct FUNCTIONAL_UNIT {
   int               rs_num; // reservation station entry number
 } func_unit_t;
 
-func_unit_t fuINT[FU_INT_SIZE];
-func_unit_t fuFP[FU_FP_SIZE]; // kinda overkiil to make an array with a single entry imo - Christian
+func_unit_t func_units[FU_INT_SIZE + FU_FP_SIZE];
 
 /* RESERVATION STATIONS */
 typedef struct RESERVATION_STATION {
@@ -265,32 +264,27 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
       printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
       // find available FU unit
       bool found_available_fu_unit = false;
+      int start_idx = 0;
+      int end_idx = 0;
       if (USES_INT_FU(reserv_stats[node->RS_entry].instr->op)) {
-        for (int i = 0; i < FU_INT_SIZE; i++) {
-          if (fuINT[i].instr == NULL) {
-            fuINT[i].instr = reserv_stats[node->RS_entry].instr;
-            fuINT[i].cycles_to_completion = FU_INT_LATENCY - 1; // -1?
-            fuINT[i].rs_num = node->RS_entry;
-            reserv_stats[node->RS_entry].executing = true;
-            found_available_fu_unit = true;
-            printf("found available fu INT unit!\n");
-            break;
-          }
-        }
+        start_idx = 0;
+        end_idx = FU_INT_SIZE;
+        printf("uses int FU...\n");
       } else if (USES_FP_FU(reserv_stats[node->RS_entry].instr->op)) {
-        for (int i = 0; i < FU_FP_SIZE; i++) {
-          if (fuFP[i].instr == NULL) {
-            fuFP[i].instr = reserv_stats[node->RS_entry].instr;
-            fuFP[i].cycles_to_completion = FU_FP_LATENCY - 1; // -1?
-            fuFP[i].rs_num = node->RS_entry;
-            reserv_stats[node->RS_entry].executing = true;
-            found_available_fu_unit = true;
-            printf("found available fu FP unit!\n");
-            break;
-          }
+        start_idx = FU_INT_SIZE;
+        end_idx = FU_INT_SIZE + FU_FP_SIZE;
+        printf("uses fp FU...\n");
+      }
+      for (int i = start_idx; i < end_idx; i++) {
+        if (func_units[i].instr == NULL) {
+          func_units[i].instr = reserv_stats[node->RS_entry].instr;
+          func_units[i].cycles_to_completion = FU_INT_LATENCY - 1; // -1?
+          func_units[i].rs_num = node->RS_entry;
+          reserv_stats[node->RS_entry].executing = true;
+          found_available_fu_unit = true;
+          printf("found available fu unit!\n");
+          break;
         }
-      } else {
-        assert(false); // this should never happen...
       }
       if (!found_available_fu_unit) printf("no available fu unity\n");
     } else {
@@ -444,16 +438,10 @@ counter_t runTomasulo(instruction_trace_t* trace)
   }
 
   //initialize functional units
-  for (i = 0; i < FU_INT_SIZE; i++) {
-    fuINT[i].instr                  = NULL;
-    fuINT[i].cycles_to_completion   = -1;
-    fuINT[i].rs_num                 = -1;
-  }
-
-  for (i = 0; i < FU_FP_SIZE; i++) {
-    fuFP[i].instr                   = NULL;
-    fuFP[i].cycles_to_completion    = -1;
-    fuFP[i].rs_num                  = -1;
+  for (i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
+    func_units[i].instr                  = NULL;
+    func_units[i].cycles_to_completion   = -1;
+    func_units[i].rs_num                 = -1;
   }
 
   //initialize map_table to no producers
