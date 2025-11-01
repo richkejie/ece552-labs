@@ -193,9 +193,9 @@ static bool is_simulation_done(counter_t sim_insn) {
  * 	None
  */
 void CDB_To_retire(int current_cycle) {
-  if (CDB.instr != NULL) {
-    CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB // I've understood the assignment to be different than this - Christian
-  }
+  // if (CDB.instr != NULL) {
+  //   CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB // I've understood the assignment to be different than this - Christian
+  // }
 
   // broadcast to reservation stations
   for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE  ; i++) { // doesnt this segfault if we don't have it filled, or is it init at some value far all indeces? - Christian
