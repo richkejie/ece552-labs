@@ -154,6 +154,7 @@ bool                h_rs_entry_ready(int);
 void                h_issue_queue_push(int);
 
 void h_alloc_rs_entry(res_stat_t*, int, instruction_t*, int);
+void h_alloc_fu_unit(int, int, int);
 /* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
@@ -265,22 +266,21 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
       bool found_available_fu_unit = false;
       int start_idx = 0;
       int end_idx = 0;
+      int cycles_to_completion = 0;
       if (USES_INT_FU(reserv_stats[node->RS_entry].instr->op)) {
         start_idx = 0;
         end_idx = FU_INT_SIZE;
+        cycles_to_completion = FU_INT_LATENCY;
         printf("uses int FU...\n");
       } else if (USES_FP_FU(reserv_stats[node->RS_entry].instr->op)) {
         start_idx = FU_INT_SIZE;
         end_idx = FU_INT_SIZE + FU_FP_SIZE;
+        cycles_to_completion = FU_FP_LATENCY;
         printf("uses fp FU...\n");
       }
       for (int i = start_idx; i < end_idx; i++) {
         if (func_units[i].instr == NULL) {
-          func_units[i].instr = reserv_stats[node->RS_entry].instr;
-          func_units[i].cycles_to_completion = FU_INT_LATENCY - 1; // -1?
-          func_units[i].rs_num = node->RS_entry;
-          reserv_stats[node->RS_entry].executing = true;
-          reserv_stats[node->RS_entry].FU_unity = i;
+          h_alloc_fu_unit(i, node->RS_entry, cycles_to_completion);
           found_available_fu_unit = true;
           printf("found available fu unit!\n");
           break;
@@ -525,7 +525,7 @@ instruction_t* h_IFQ_pop() {
 void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instruction_t* instr, int inst_cycle) {
   res_stat_entry->busy        = true;
   res_stat_entry->executing   = false;
-  res_stat_entry->FU_untiy    = -1;
+  res_stat_entry->FU_unit     = -1;
   res_stat_entry->instr       = instr;
 
   // T0, T1, T2: input registers
@@ -549,6 +549,14 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   }
 
   res_stat_entry->inst_cycle = inst_cycle;
+}
+void h_alloc_fu_unit(int FU_index, int RS_entry, int cycles_to_completion) {
+  func_units[FU_index].instr                  = reserv_stats[RS_entry].instr;
+  func_units[FU_index].cycles_to_completion   = cycles_to_completion;
+  func_units[FU_index].rs_num                 = RS_entry;
+
+  reserv_stats[RS_entry].executing            = true;
+  reserv_stats[RS_entry].FU_unit              = FU_index;
 }
 
 bool h_rs_entry_ready(int RS_entry) {
