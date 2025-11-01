@@ -132,15 +132,26 @@ typedef struct COMMON_DATA_BUS {
 
 cdb_t CDB;
 
+/* ISSUE QUEUE */
+typedef struct ISSUE_QUEUE_NODE { // implement queue as linked list since can be arbitrary size
+  int                       RS_entry; // index of reserv_stats array
+  struct ISSUE_QUEUE_NODE   *next;
+} issue_queue_node_t;
+
+issue_queue_node_t *issue_queue_head = NULL;
+int issue_queue_size = 0;
+
 /* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 // helper function prototypes
-bool h_IFQ_full();
-bool h_IFQ_empty();
-void h_IFQ_push(instruction_t*);
-instruction_t* h_IFQ_head();
-instruction_t* h_IFQ_pop();
+bool                h_IFQ_full();
+bool                h_IFQ_empty();
+void                h_IFQ_push(instruction_t*);
+instruction_t*      h_IFQ_head();
+instruction_t*      h_IFQ_pop();
+bool                h_rs_entry_ready(int);
+void                h_issue_queue_push(int);
 
 void h_alloc_rs_entry(res_stat_t*, int, instruction_t*, int);
 /* ECE552 Assignment 3 - END CODE */
@@ -221,6 +232,7 @@ void execute_To_CDB(int current_cycle) {
 
 }
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves instruction(s) from the issue to the execute stage (if possible). We prioritize old instructions
@@ -232,68 +244,61 @@ void execute_To_CDB(int current_cycle) {
  * 	None
  */
 void issue_To_execute(int current_cycle) { // I haven't figured out if we can only send one int and one fp to exec per cycle or as many as there are FU ready - Christian
+  issue_queue_node_t *node;
 
-  /* ECE552: YOUR CODE GOES HERE */
-
-  /* ECE552 Assignment 3 - BEGIN CODE */
-  bool rs_entry_ready = true;
-  int valid_fu_index;
-  for (int k = 0; k>FU_INT_SIZE; k++){
-    if (fuINT[k].cycles_to_completion<=0) { // Check for a FU that is free, might need to be == instead of <= - Christian
-      valid_fu_index = k;
-      goto res_int; 
-    }
+  if (issue_queue_size == 0) {
+    printf("issue queue is empty, no instrs to issue\n");
+  } else {
+    printf("issue queue is not empty, finding ready instr to issue...\n");
   }
-  goto res_fp; // goto kinda scares me - Christian
-  
-  res_int:
-  for (int i = 0; i < RESERV_INT_SIZE; i++) { // Considering if we also need Head and Tail for reservINT[] - Christian
-    rs_entry_ready = true;
-    instruction_t *int_insn = reservINT[i].instr;
-    for (int j = 0; j < NUM_INPUT_REGS; j++) { 
-      if (int_insn->r_in[j] != -1) {
-        rs_entry_ready = false; // If any one of the values aren't ready set false and break - Christian
-        break;
+
+  for (node = issue_queue_head; node != NULL; node = node->next) {
+    assert(reserv_stats[node->RS_entry].instr != NULL);
+    // if instruction is already in FU, continue
+    if (reserv_stats[node->RS_entry].executing) {
+      printf("instr in RS entry %d is already executing...\n", node->RS_entry);
+      continue; 
+    }
+
+    // if instruction is ready, move to execute
+    if (h_rs_entry_ready(node->RS_entry)) {
+      printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
+      // find available FU unit
+      bool found_available_fu_unit = false;
+      if (USES_INT_FU(reserv_stats[node->RS_entry].instr->op)) {
+        for (int i = 0; i < FU_INT_SIZE; i++) {
+          if (fuINT[i].instr == NULL) {
+            fuINT[i].instr = reserv_stats[node->RS_entry].instr;
+            fuINT[i].cycles_to_completion = FU_INT_LATENCY - 1; // -1?
+            fuINT[i].rs_num = node->RS_entry;
+            reserv_stats[node->RS_entry].executing = true;
+            found_available_fu_unit = true;
+            printf("found available fu INT unit!\n");
+            break;
+          }
+        }
+      } else if (USES_FP_FU(reserv_stats[node->RS_entry].instr->op)) {
+        for (int i = 0; i < FU_FP_SIZE; i++) {
+          if (fuFP[i].instr == NULL) {
+            fuFP[i].instr = reserv_stats[node->RS_entry].instr;
+            fuFP[i].cycles_to_completion = FU_FP_LATENCY - 1; // -1?
+            fuFP[i].rs_num = node->RS_entry;
+            reserv_stats[node->RS_entry].executing = true;
+            found_available_fu_unit = true;
+            printf("found available fu FP unit!\n");
+            break;
+          }
+        }
+      } else {
+        assert(false); // this should never happen...
       }
-    }
-    if (rs_entry_ready) {
-      fuINT[valid_fu_index].instr=int_insn; 
-      fuINT[valid_fu_index].cycles_to_completion = 5;
-      fuINT[valid_fu_index].rs_num=i;
-      break; // break since we found a valid insn to exec - Christian
+      if (!found_available_fu_unit) printf("no available fu unity\n");
+    } else {
+      printf("instr in RS entry %d is not ready\n", node->RS_entry);
     }
   }
-
-  res_fp:
-  for (int i = 0; i < RESERV_FP_SIZE; i++) {
-    if (fuFP[0].cycles_to_completion>0) break; // fuFP not ready, maybe need to be >= depending on implementation - Christian
-    rs_entry_ready = true;
-    instruction_t *fp_insn = reservFP[0].instr;
-    for (int j = 0; j < NUM_INPUT_REGS; j++) { 
-      if (fp_insn->r_in[j] != -1) {
-        rs_entry_ready = false; // If any one of the values aren't ready set false and break - Christian
-        break;
-      }
-    }
-
-    if (rs_entry_ready) {
-      fuFP[0].instr=fp_insn; // index needs to be rotated in a thoughtful way - Christian
-      fuFP[0].cycles_to_completion = 7;
-      fuFP[0].rs_num=i;
-      break; // break since we found a valid insn to exec - Christian
-    }
-  }
-
-
-
-
-
-
-
-
-
-  /* ECE552 Assignment 3 - END CODE */
 }
+/* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 /* 
@@ -313,7 +318,9 @@ void dispatch_To_issue(int current_cycle) {
     printf("Dispatching...\n");
   }
 
-  instruction_t* dispatched_instr = h_IFQ_head(); // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
+  instruction_t* dispatched_instr = h_IFQ_head(); 
+  // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
+  // generally, pop operations return the head - Richard
   assert (dispatched_instr != NULL);
   dispatched_instr->tom_dispatch_cycle++; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
 
@@ -330,27 +337,30 @@ void dispatch_To_issue(int current_cycle) {
   int start_idx = 0;
   int end_idx = 0;
   if (USES_INT_FU(dispatched_instr->op)) {
-    printf("dispatched instr uses INT FU, searching for available RS entry...\n");
+    printf("dispatched instr uses INT FU\n");
     start_idx = 0;
     end_idx = RESERV_INT_SIZE;
   } else if (USES_FP_FU(dispatched_instr->op)) {
-    printf("dispatched instr uses FP FU, searching for available RS entry...\n");
+    printf("dispatched instr uses FP FU\n");
     start_idx = RESERV_INT_SIZE;
     end_idx = RESERV_INT_SIZE + RESERV_FP_SIZE;
   } else {
     printf("ERROR: dispatched instr uses does not INT nor FP FU\n");
   }
 
+  if (start_idx != end_idx) printf("searching for available RS entry...\n");
   for (int i = start_idx; i < end_idx; i++) {
     if (!reserv_stats[i].busy) {
       printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
       h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle);
+      h_issue_queue_push(i); // push to issue queue to record age of instructions
       h_IFQ_pop();
       printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
       found_available_rs_entry = true;
       break;
     }
   }
+  if (!found_available_rs_entry) printf("no available RS entry!\n");
 }
 /* ECE552 Assignment 3 - END CODE */
 
@@ -483,11 +493,13 @@ bool h_IFQ_full() {
   assert (IFQ_instr_count <= INSTR_QUEUE_SIZE); // I dont get this? Christian
   assert (0 <= IFQ_instr_count);
   return IFQ_instr_count >= INSTR_QUEUE_SIZE; // If assert is to makes sense this should be == and not >=
+
+  // assert is for sanity checks; logic should be 'correct' even if asserts are not there - Richard
 }
 bool h_IFQ_empty() {
   assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
   assert (0 <= IFQ_instr_count);
-  return IFQ_instr_count == 0;
+  return IFQ_instr_count <= 0;
 }
 
 void h_IFQ_push(instruction_t* instr) {
@@ -527,7 +539,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   res_stat_entry->instr = instr;
 
   // T0, T1, T2: input registers
-  for (int i = 0; i < 3; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
+  for (int i = 0; i < NUM_INPUT_REGS; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
     if (instr->r_in[i] != -1) {
       res_stat_entry->T[i] = map_table[instr->r_in[i]];
     } else {
@@ -538,7 +550,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   // R0, R1: output registers (stores don't have output registers)
   // also update map table
   if (!IS_STORE(instr->op)) {
-    for (int i = 0; i < 2; i++) { // should probably use NUM_OUTPUT_REGS instead of 2 - Christian
+    for (int i = 0; i < NUM_OUTPUT_REGS; i++) { // should probably use NUM_OUTPUT_REGS instead of 2 - Christian
       if (instr->r_out[i] != -1) {
         res_stat_entry->R[i] = instr->r_out[i];
         map_table[instr->r_out[i]] = res_stat_index;
@@ -547,5 +559,29 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   }
 
   res_stat_entry->inst_cycle = inst_cycle;
+}
+
+bool h_rs_entry_ready(int RS_entry) {
+  for (int i = 0; i < NUM_INPUT_REGS; i++) {
+    if (reserv_stats[RS_entry].T[i] != -1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void h_issue_queue_push(int RS_entry) {
+  issue_queue_node_t *node = (issue_queue_node_t*)malloc(sizeof(issue_queue_node_t));
+  node->RS_entry = RS_entry;
+  node->next = NULL;
+
+  if (issue_queue_head == NULL) {
+    issue_queue_head = node;
+  } else {
+    issue_queue_node_t *ptr;
+    for (ptr = issue_queue_head; ptr->next != NULL; ptr = ptr->next){}
+    ptr->next = node;
+  }
+  issue_queue_size++;
 }
 /* ECE552 Assignment 3 - END CODE */
