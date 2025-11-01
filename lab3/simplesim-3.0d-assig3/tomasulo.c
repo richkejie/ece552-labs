@@ -115,10 +115,11 @@ func_unit_t func_units[FU_INT_SIZE + FU_FP_SIZE];
 typedef struct RESERVATION_STATION {
   bool              busy;
   bool              executing;
+  int               FU_unit;
   instruction_t*    instr;
   int               R[NUM_OUTPUT_REGS];
   int               T[NUM_INPUT_REGS];
-  int               inst_cycle;
+  int               inst_cycle; // cycle this entry is instantiated (allocated)
 } res_stat_t;
 
 res_stat_t reserv_stats[RESERV_INT_SIZE + RESERV_FP_SIZE];
@@ -213,7 +214,7 @@ void CDB_To_retire(int current_cycle) {
 }
 /* ECE552 Assignment 3 - END CODE */
 
-
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves an instruction from the execution stage to common data bus (if possible)
@@ -224,12 +225,10 @@ void CDB_To_retire(int current_cycle) {
  */
 void execute_To_CDB(int current_cycle) {
 
-  /* ECE552: YOUR CODE GOES HERE */
-
-  /* ECE552 Assignment 3 - BEGIN CODE */
-  /* ECE552 Assignment 3 - END CODE */
+  
 
 }
+/* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 /* 
@@ -281,6 +280,7 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
           func_units[i].cycles_to_completion = FU_INT_LATENCY - 1; // -1?
           func_units[i].rs_num = node->RS_entry;
           reserv_stats[node->RS_entry].executing = true;
+          reserv_stats[node->RS_entry].FU_unity = i;
           found_available_fu_unit = true;
           printf("found available fu unit!\n");
           break;
@@ -427,6 +427,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
   for (i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
     reserv_stats[i].busy          = false;
     reserv_stats[i].executing     = false;
+    reserv_stats[i].FU_unit       = -1;
     reserv_stats[i].instr         = NULL;
     for (int j = 0; j < NUM_OUTPUT_REGS; j++) {
       reserv_stats[i].R[j]        = -1;
@@ -522,9 +523,10 @@ instruction_t* h_IFQ_pop() {
 }
 
 void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instruction_t* instr, int inst_cycle) {
-  res_stat_entry->busy = true;
-  res_stat_entry->executing = false;
-  res_stat_entry->instr = instr;
+  res_stat_entry->busy        = true;
+  res_stat_entry->executing   = false;
+  res_stat_entry->FU_untiy    = -1;
+  res_stat_entry->instr       = instr;
 
   // T0, T1, T2: input registers
   for (int i = 0; i < NUM_INPUT_REGS; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
