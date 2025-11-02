@@ -135,6 +135,7 @@ cdb_t CDB;
 /* INSTRUCTION LIST */
 typedef struct INSTR_NODE { // implement as linked list since can be arbitrary size
   int                       RS_entry; // index of reserv_stats array
+  struct INSTR_NODE         *prev;
   struct INSTR_NODE         *next;
 } instr_node_t;
 
@@ -570,6 +571,7 @@ bool h_rs_entry_ready(int RS_entry) {
 void h_instr_list_push(int RS_entry) {
   instr_node_t *node = (instr_node_t*)malloc(sizeof(instr_node_t));
   node->RS_entry = RS_entry;
+  node->prev = NULL;
   node->next = NULL;
 
   if (instr_list_head == NULL) {
@@ -578,6 +580,7 @@ void h_instr_list_push(int RS_entry) {
     instr_node_t *ptr;
     for (ptr = instr_list_head; ptr->next != NULL; ptr = ptr->next){}
     ptr->next = node;
+    node->prev = ptr;
   }
   instr_list_size++;
 }
