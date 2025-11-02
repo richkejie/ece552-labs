@@ -23,15 +23,15 @@
 
 /* PARAMETERS OF THE TOMASULO'S ALGORITHM */
 
-#define INSTR_QUEUE_SIZE         10
+#define INSTR_QUEUE_SIZE         16
 
-#define RESERV_INT_SIZE    4
-#define RESERV_FP_SIZE     2
-#define FU_INT_SIZE        2
+#define RESERV_INT_SIZE    5
+#define RESERV_FP_SIZE     3
+#define FU_INT_SIZE        3
 #define FU_FP_SIZE         1
 
-#define FU_INT_LATENCY     4
-#define FU_FP_LATENCY      9
+#define FU_INT_LATENCY     5
+#define FU_FP_LATENCY      7
 
 /* IDENTIFYING INSTRUCTIONS */
 
@@ -75,36 +75,101 @@
   md_print_insn(instr->inst, instr->pc, out); \
   myfprintf(stdout, "(%d)\n",instr->index);
 
+
+/* ECE552 Assignment 3 - BEGIN CODE */
+/* DEFINES */
+#define NUM_INPUT_REGS    3
+#define NUM_OUTPUT_REGS   2
+
+#define DEBUG_PRINTF false
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* VARIABLES */
 
 //instruction queue for tomasulo
-static instruction_t* instr_queue[INSTR_QUEUE_SIZE];
+static instruction_t* IFQ[INSTR_QUEUE_SIZE];
+// if head == tail: IFQ empty
+// if tail 1 before head: IFQ full
+// implementing a circular buffer
+int IFQ_head = 0;
+int IFQ_tail = 0;
 //number of instructions in the instruction queue
-static int instr_queue_size = 0;
-
-//reservation stations (each reservation station entry contains a pointer to an instruction)
-static instruction_t* reservINT[RESERV_INT_SIZE];
-static instruction_t* reservFP[RESERV_FP_SIZE];
-
-//functional units
-static instruction_t* fuINT[FU_INT_SIZE];
-static instruction_t* fuFP[FU_FP_SIZE];
-
-//common data bus
-static instruction_t* commonDataBus = NULL;
-
-//The map table keeps track of which instruction produces the value for each register
-static instruction_t* map_table[MD_TOTAL_REGS];
+static int IFQ_instr_count = 0;
 
 //the index of the last instruction fetched
 static int fetch_index = 0;
 
-/* FUNCTIONAL UNITS */
+/* MAP TABLE */
+int map_table[MD_TOTAL_REGS];
 
+/* FUNCTIONAL UNITS */
+typedef struct FUNCTIONAL_UNIT {
+  instruction_t*    instr;
+  int               cycles_to_completion; 
+  int               rs_num; // reservation station entry number
+} func_unit_t;
+
+func_unit_t func_units[FU_INT_SIZE + FU_FP_SIZE];
 
 /* RESERVATION STATIONS */
+typedef struct RESERVATION_STATION {
+  bool              busy;
+  bool              executing;
+  int               FU_unit;
+  instruction_t*    instr;
+  int               R[NUM_OUTPUT_REGS];
+  int               T[NUM_INPUT_REGS];
+  int               inst_cycle; // cycle this entry is instantiated (allocated)
+} res_stat_t;
 
+res_stat_t reserv_stats[RESERV_INT_SIZE + RESERV_FP_SIZE];
 
+/* COMMON DATA BUS */
+typedef struct COMMON_DATA_BUS {
+  instruction_t*    instr;
+  int               T; // tag
+} cdb_t;
+
+cdb_t CDB;
+
+/* INSTRUCTION LIST */
+typedef struct INSTR_NODE { // implement as linked list since can be arbitrary size
+  int                       RS_entry; // index of reserv_stats array
+  struct INSTR_NODE         *prev;
+  struct INSTR_NODE         *next;
+} instr_node_t;
+
+instr_node_t *instr_list_head = NULL;
+int instr_list_size = 0;
+
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
+// helper function prototypes
+bool                h_IFQ_full();
+bool                h_IFQ_empty();
+void                h_IFQ_push(instruction_t*);
+instruction_t*      h_IFQ_head();
+instruction_t*      h_IFQ_pop();
+
+void                h_alloc_rs_entry(res_stat_t*, int, instruction_t*, int);
+void                h_dealloc_rs_entry(res_stat_t*);
+bool                h_rs_entry_ready(int);
+
+void                h_alloc_fu_unit(int, int, int);
+void                h_dealloc_fu_unit(int);
+void                h_advance_fu_unit(int, int);
+
+void                h_instr_list_push(int);
+void                h_instr_list_remove(instr_node_t*);
+
+bool                h_CDB_free();
+void                h_write_CDB(instruction_t*, int);
+
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Checks if simulation is done by finishing the very last instruction
@@ -115,12 +180,22 @@ static int fetch_index = 0;
  * 	True: if simulation is finished
  */
 static bool is_simulation_done(counter_t sim_insn) {
+  if (fetch_index < sim_insn) return false; // have not fetched the last instr yet
+  if (!h_IFQ_empty()) return false; // have not handled all instrs in IFQ yet
 
-  /* ECE552: YOUR CODE GOES HERE */
+  // if RS not empty or FU not empty (i.e. instr is executing), need to continue
+  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
+    if (reserv_stats[i].busy || reserv_stats[i].executing) return false;
+  }
 
-  return true; //ECE552: you can change this as needed; we've added this so the code provided to you compiles
+  // if CDB not empty, need to continue
+  if (CDB.T != -1) return false;
+
+  return true;
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Retires the instruction from writing to the Common Data Bus
@@ -130,12 +205,33 @@ static bool is_simulation_done(counter_t sim_insn) {
  * 	None
  */
 void CDB_To_retire(int current_cycle) {
+  // if (CDB.instr != NULL) {
+  //   CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB // I've understood the assignment to be different than this - Christian
+  // }
 
-  /* ECE552: YOUR CODE GOES HERE */
+  if (!((CDB.instr == NULL) || (CDB.T == -1))) {
+    if (DEBUG_PRINTF) printf("broadcasting tag T = %d from CDB...\n", CDB.T);
+  }
 
+  // broadcast to reservation stations
+  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE  ; i++) { // doesnt this segfault if we don't have it filled, or is it init at some value far all indeces? - Christian
+    for (int j = 0; j < NUM_INPUT_REGS; j++) {
+      if (reserv_stats[i].T[j] == CDB.T) reserv_stats[i].T[j] = -1;
+    }
+  }
+
+  // broadcast to map table
+  for (int i = 0; i < MD_TOTAL_REGS; i++) {
+    if (map_table[i] == CDB.T) map_table[i] = -1;
+  }
+
+  // clear CDB
+  CDB.T     = -1;
+  CDB.instr = NULL;
 }
+/* ECE552 Assignment 3 - END CODE */
 
-
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves an instruction from the execution stage to common data bus (if possible)
@@ -145,11 +241,64 @@ void CDB_To_retire(int current_cycle) {
  * 	None
  */
 void execute_To_CDB(int current_cycle) {
+  instr_node_t* node, *temp;
 
-  /* ECE552: YOUR CODE GOES HERE */
+  // check for execution completion
+  // check oldest instr first, since they get prio to enter CDB
+  int FU_index;
+  instruction_t *instr;
+  for (node = instr_list_head; node != NULL; node = node->next) {
+    if (reserv_stats[node->RS_entry].executing) {
+      
+      FU_index = reserv_stats[node->RS_entry].FU_unit;
+      instr = reserv_stats[node->RS_entry].instr;
 
+      assert(func_units[FU_index].instr == reserv_stats[node->RS_entry].instr);
+      assert(func_units[FU_index].rs_num == node->RS_entry);
+
+      if (func_units[FU_index].cycles_to_completion == 0) {
+        if (DEBUG_PRINTF) printf("instr in RS entry %d has finished executing!\n", node->RS_entry);
+        // this instr has finished executing
+        // check if it needs to write to CDB
+        if (WRITES_CDB(func_units[FU_index].instr->op)) {
+          // if CDB is free, write instr to CDB, otherwise wait
+          if (h_CDB_free()) {
+            if (DEBUG_PRINTF) printf("CDB available, writing to CDB, and deallocating FU and RS entry and removing from list...\n");
+            h_write_CDB(instr, node->RS_entry);
+            h_dealloc_fu_unit(FU_index);
+            h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
+            temp = node->next;
+            h_instr_list_remove(node);
+            node = temp;
+            if (node == NULL) break;
+          } else {
+            if (DEBUG_PRINTF) printf("CDB busy, waiting...\n");
+            continue;
+          }
+        } else {
+          if (DEBUG_PRINTF) printf("completed instr does not write to CDB, deallocating FU and RS entry and removing from list...\n");
+          h_dealloc_fu_unit(FU_index);
+          h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
+          temp = node->next;
+          h_instr_list_remove(node);
+          node = temp;
+          if (node == NULL) break;
+        }
+      }
+    }
+  }
+
+  // advance all instrs in FU units by 1 cycle
+  for (int i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
+    if (func_units[i].rs_num != -1) {
+      if (DEBUG_PRINTF) printf("instr in RS entry %d is executing...\n", func_units[i].rs_num);
+    }
+    h_advance_fu_unit(i, 1);
+  }
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves instruction(s) from the issue to the execute stage (if possible). We prioritize old instructions
@@ -160,11 +309,59 @@ void execute_To_CDB(int current_cycle) {
  * Returns:
  * 	None
  */
-void issue_To_execute(int current_cycle) {
+void issue_To_execute(int current_cycle) { // I haven't figured out if we can only send one int and one fp to exec per cycle or as many as there are FU ready - Christian
+  instr_node_t *node;
 
-  /* ECE552: YOUR CODE GOES HERE */
+  if (instr_list_size == 0) {
+    if (DEBUG_PRINTF) printf("instr list is empty, no instrs to issue\n");
+  } else {
+    if (DEBUG_PRINTF) printf("instr list is not empty, finding ready instr to issue...\n");
+  }
+
+  for (node = instr_list_head; node != NULL; node = node->next) {
+    assert(reserv_stats[node->RS_entry].instr != NULL);
+    // if instruction is already in FU, continue
+    if (reserv_stats[node->RS_entry].executing) {
+      if (DEBUG_PRINTF) printf("instr in RS entry %d is already executing...\n", node->RS_entry);
+      continue; 
+    }
+
+    // if instruction is ready, move to execute
+    if (h_rs_entry_ready(node->RS_entry)) {
+      if (DEBUG_PRINTF) printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
+      // find available FU unit
+      bool found_available_fu_unit = false;
+      int start_idx = 0;
+      int end_idx = 0;
+      int cycles_to_completion = 0;
+      if (USES_INT_FU(reserv_stats[node->RS_entry].instr->op)) {
+        start_idx = 0;
+        end_idx = FU_INT_SIZE;
+        cycles_to_completion = FU_INT_LATENCY;
+        if (DEBUG_PRINTF) printf("uses int FU...\n");
+      } else if (USES_FP_FU(reserv_stats[node->RS_entry].instr->op)) {
+        start_idx = FU_INT_SIZE;
+        end_idx = FU_INT_SIZE + FU_FP_SIZE;
+        cycles_to_completion = FU_FP_LATENCY;
+        if (DEBUG_PRINTF) printf("uses fp FU...\n");
+      }
+      for (int i = start_idx; i < end_idx; i++) {
+        if (func_units[i].instr == NULL) {
+          h_alloc_fu_unit(i, node->RS_entry, cycles_to_completion);
+          found_available_fu_unit = true;
+          if (DEBUG_PRINTF) printf("found available fu unit!\n");
+          break;
+        }
+      }
+      if (!found_available_fu_unit) if (DEBUG_PRINTF) printf("no available fu unit!\n");
+    } else {
+      if (DEBUG_PRINTF) printf("instr in RS entry %d is not ready\n", node->RS_entry);
+    }
+  }
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves instruction(s) from the dispatch stage to the issue stage
@@ -174,10 +371,61 @@ void issue_To_execute(int current_cycle) {
  * 	None
  */
 void dispatch_To_issue(int current_cycle) {
+  // if IFQ empty don't do anything
+  if (h_IFQ_empty()) {
+    if (DEBUG_PRINTF) printf("IFQ empty, no instrs to dispatch\n");
+    return;
+  } else {
+    if (DEBUG_PRINTF) printf("there are instrs in IFQ, dispatching...\n");
+  }
 
-  /* ECE552: YOUR CODE GOES HERE */
+  instruction_t* dispatched_instr = h_IFQ_head(); 
+  // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
+  // generally, pop operations return the head - Richard
+  assert (dispatched_instr != NULL);
+  dispatched_instr->tom_dispatch_cycle++; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
+
+  // conditional and unconditional branches do not get dispatched to RS
+  // so simply pop from IFQ and skip
+  if (IS_COND_CTRL(dispatched_instr->op) || IS_UNCOND_CTRL(dispatched_instr->op)) {
+    if (DEBUG_PRINTF) printf("dispatched instr was branch, popping from IFQ and skipping...\n");
+    h_IFQ_pop();
+    return;
+  }
+
+  // move into appropriate RS
+  bool found_available_rs_entry = false;
+  int start_idx = 0;
+  int end_idx = 0;
+  if (USES_INT_FU(dispatched_instr->op)) {
+    if (DEBUG_PRINTF) printf("dispatched instr uses INT FU\n");
+    start_idx = 0;
+    end_idx = RESERV_INT_SIZE;
+  } else if (USES_FP_FU(dispatched_instr->op)) {
+    if (DEBUG_PRINTF) printf("dispatched instr uses FP FU\n");
+    start_idx = RESERV_INT_SIZE;
+    end_idx = RESERV_INT_SIZE + RESERV_FP_SIZE;
+  } else {
+    if (DEBUG_PRINTF) printf("ERROR: dispatched instr uses does not INT nor FP FU\n");
+  }
+
+  if (start_idx != end_idx) if (DEBUG_PRINTF) printf("searching for available RS entry...\n");
+  for (int i = start_idx; i < end_idx; i++) {
+    if (!reserv_stats[i].busy) {
+      if (DEBUG_PRINTF) printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
+      h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle);
+      h_instr_list_push(i); // push to issue queue to record age of instructions
+      h_IFQ_pop();
+      if (DEBUG_PRINTF) printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
+      found_available_rs_entry = true;
+      break;
+    }
+  }
+  if (!found_available_rs_entry) if (DEBUG_PRINTF) printf("no available RS entry!\n");
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Grabs an instruction from the instruction trace (if possible)
@@ -187,10 +435,22 @@ void dispatch_To_issue(int current_cycle) {
  * 	None
  */
 void fetch(instruction_trace_t* trace) {
+  instruction_t* fetched_instr;
+  do {
+    fetched_instr = get_instr(trace, ++fetch_index); // get_instr stated in instr.h
+                                                     // pre-increment fetch_index bc it 
+                                                     // is index of last fetched isntr
+  } while (IS_TRAP(fetched_instr->op)); // skip trap instructions
 
-  /* ECE552: YOUR CODE GOES HERE */
+  if (fetch_index <= sim_num_insn) { // only fetch if within limit of instrs
+    h_IFQ_push(fetched_instr);
+  } else {
+    if (DEBUG_PRINTF) printf("fetch_index: %d, exceeds sim_num_insn: %d\n", fetch_index, (int)sim_num_insn);
+  }
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Calls fetch and dispatches an instruction at the same cycle (if possible)
@@ -201,12 +461,17 @@ void fetch(instruction_trace_t* trace) {
  * 	None
  */
 void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
-
-  fetch(trace);
-
-  /* ECE552: YOUR CODE GOES HERE */
+  if (!h_IFQ_full()) {
+    if (DEBUG_PRINTF) printf("IFQ not full; IFQ_instr_count: %d; fetching...\n", IFQ_instr_count); // to remove
+    fetch(trace);
+    if (DEBUG_PRINTF) printf("fetched! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail); // to remove
+  } else {
+    if (DEBUG_PRINTF) printf("IFQ full\n");
+  }
 }
+/* ECE552 Assignment 3 - END CODE */
 
+/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Performs a cycle-by-cycle simulation of the 4-stage pipeline
@@ -222,43 +487,199 @@ counter_t runTomasulo(instruction_trace_t* trace)
   //initialize instruction queue
   int i;
   for (i = 0; i < INSTR_QUEUE_SIZE; i++) {
-    instr_queue[i] = NULL;
+    IFQ[i] = NULL;
   }
 
   //initialize reservation stations
-  for (i = 0; i < RESERV_INT_SIZE; i++) {
-      reservINT[i] = NULL;
-  }
-
-  for(i = 0; i < RESERV_FP_SIZE; i++) {
-      reservFP[i] = NULL;
+  for (i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
+    reserv_stats[i].busy          = false;
+    reserv_stats[i].executing     = false;
+    reserv_stats[i].FU_unit       = -1;
+    reserv_stats[i].instr         = NULL;
+    for (int j = 0; j < NUM_OUTPUT_REGS; j++) {reserv_stats[i].R[j] = -1;}
+    for (int j = 0; j < NUM_INPUT_REGS; j++)  {reserv_stats[i].T[j] = -1;}
+    reserv_stats[i].inst_cycle    = 0;
   }
 
   //initialize functional units
-  for (i = 0; i < FU_INT_SIZE; i++) {
-    fuINT[i] = NULL;
-  }
-
-  for (i = 0; i < FU_FP_SIZE; i++) {
-    fuFP[i] = NULL;
+  for (i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
+    func_units[i].instr                  = NULL;
+    func_units[i].cycles_to_completion   = -1;
+    func_units[i].rs_num                 = -1;
   }
 
   //initialize map_table to no producers
   int reg;
   for (reg = 0; reg < MD_TOTAL_REGS; reg++) {
-    map_table[reg] = NULL;
+    map_table[reg] = -1;
   }
+
+  // initialize the CDB
+  CDB.T     = -1;
+  CDB.instr = NULL;
   
+  if (DEBUG_PRINTF) printf("structures initialized!\n\n\n");
+
   int cycle = 1;
   while (true) {
-
-     /* ECE552: YOUR CODE GOES HERE */
-
-     cycle++;
-
-     if (is_simulation_done(sim_num_insn))
-        break;
+    if (DEBUG_PRINTF) printf("\ncycle %d:\n", cycle);
+    CDB_To_retire(cycle);
+    execute_To_CDB(cycle);
+    issue_To_execute(cycle);
+    dispatch_To_issue(cycle);
+    fetch_To_dispatch(trace, cycle);
+    if (is_simulation_done(sim_num_insn)) break;
+    cycle++;
   }
   
   return cycle;
 }
+/* ECE552 Assignment 3 - END CODE */
+
+/* ECE552 Assignment 3 - BEGIN CODE */
+// this section contains helper functions
+bool h_IFQ_full() {
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE); // I dont get this? Christian
+  assert (0 <= IFQ_instr_count);
+  return IFQ_instr_count >= INSTR_QUEUE_SIZE; // If assert is to makes sense this should be == and not >=
+
+  // assert is for sanity checks; logic should be 'correct' even if asserts are not there - Richard
+}
+bool h_IFQ_empty() {
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
+  assert (0 <= IFQ_instr_count);
+  return IFQ_instr_count <= 0;
+}
+void h_IFQ_push(instruction_t* instr) {
+  assert (!h_IFQ_full());
+
+  IFQ[IFQ_tail] = instr;
+  if (IFQ_tail == INSTR_QUEUE_SIZE-1) {
+    IFQ_tail = 0;
+  } else {
+    IFQ_tail++;
+  }
+  IFQ_instr_count++;
+}
+instruction_t* h_IFQ_head() {
+  return IFQ[IFQ_head];
+}
+instruction_t* h_IFQ_pop() {
+  assert(!h_IFQ_empty());
+
+  instruction_t* popped_instr;
+  popped_instr = h_IFQ_head();
+
+  IFQ[IFQ_head] = NULL;
+  if (IFQ_head == INSTR_QUEUE_SIZE-1) {
+    IFQ_head = 0;
+  } else {
+    IFQ_head++;
+  }
+  IFQ_instr_count--;
+
+  return popped_instr;
+}
+
+void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instruction_t* instr, int inst_cycle) {
+  res_stat_entry->busy        = true;
+  res_stat_entry->executing   = false;
+  res_stat_entry->FU_unit     = -1;
+  res_stat_entry->instr       = instr;
+
+  // T0, T1, T2: input registers
+  for (int i = 0; i < NUM_INPUT_REGS; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
+    if (instr->r_in[i] != -1) {
+      res_stat_entry->T[i] = map_table[instr->r_in[i]];
+    } else {
+      res_stat_entry->T[i] = -1;
+    }
+  }
+
+  // R0, R1: output registers (stores don't have output registers)
+  // also update map table
+  if (!IS_STORE(instr->op)) {
+    for (int i = 0; i < NUM_OUTPUT_REGS; i++) { // should probably use NUM_OUTPUT_REGS instead of 2 - Christian
+      if (instr->r_out[i] != -1) {
+        res_stat_entry->R[i] = instr->r_out[i];
+        map_table[instr->r_out[i]] = res_stat_index;
+      }
+    }
+  }
+
+  res_stat_entry->inst_cycle = inst_cycle;
+}
+void h_dealloc_rs_entry(res_stat_t* res_stat_entry) {
+  res_stat_entry->busy        = false;
+  res_stat_entry->executing   = false;
+  res_stat_entry->FU_unit     = -1;
+  res_stat_entry->instr       = NULL;
+  for (int i = 0; i < NUM_OUTPUT_REGS; i++) {res_stat_entry->R[i] = -1;}
+  for (int i = 0; i < NUM_INPUT_REGS; i++)  {res_stat_entry->T[i] = -1;}
+  res_stat_entry->inst_cycle  = 0;    
+}
+bool h_rs_entry_ready(int RS_entry) {
+  for (int i = 0; i < NUM_INPUT_REGS; i++) {
+    if (reserv_stats[RS_entry].T[i] != -1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void h_alloc_fu_unit(int FU_index, int RS_entry, int cycles_to_completion) {
+  func_units[FU_index].instr                  = reserv_stats[RS_entry].instr;
+  func_units[FU_index].cycles_to_completion   = cycles_to_completion;
+  func_units[FU_index].rs_num                 = RS_entry;
+
+  reserv_stats[RS_entry].executing            = true;
+  reserv_stats[RS_entry].FU_unit              = FU_index;
+}
+void h_dealloc_fu_unit(int FU_index) {
+  func_units[FU_index].instr                  = NULL;
+  func_units[FU_index].cycles_to_completion   = -1;
+  func_units[FU_index].rs_num                 = -1;
+}
+void h_advance_fu_unit(int FU_index, int num_cycles) {
+  int cur_cycles = func_units[FU_index].cycles_to_completion;
+  int new_cycles = cur_cycles - num_cycles;
+  func_units[FU_index].cycles_to_completion = new_cycles < 0 ? 0 : new_cycles;
+}
+
+void h_instr_list_push(int RS_entry) {
+  instr_node_t *node = (instr_node_t*)malloc(sizeof(instr_node_t));
+  node->RS_entry = RS_entry;
+  node->prev = NULL;
+  node->next = NULL;
+
+  if (instr_list_head == NULL) {
+    instr_list_head = node;
+  } else {
+    instr_node_t *ptr;
+    for (ptr = instr_list_head; ptr->next != NULL; ptr = ptr->next){}
+    ptr->next = node;
+    node->prev = ptr;
+  }
+  instr_list_size++;
+}
+void h_instr_list_remove(instr_node_t* node) {
+  assert (node != NULL);
+  if (node == instr_list_head) {
+    instr_list_head = node->next;
+    if (node->next != NULL) node->next->prev = instr_list_head;
+  } else {
+    node->prev->next = node->next;
+    if (node->next != NULL) node->next->prev = node->prev;
+  }
+  free(node);
+  instr_list_size--;
+}
+
+bool h_CDB_free() {
+  return (CDB.T == -1);
+}
+void h_write_CDB(instruction_t *instr, int T) {
+  CDB.instr = instr;
+  CDB.T = T;
+}
+/* ECE552 Assignment 3 - END CODE */
