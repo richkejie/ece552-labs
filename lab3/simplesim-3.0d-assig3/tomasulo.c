@@ -132,14 +132,14 @@ typedef struct COMMON_DATA_BUS {
 
 cdb_t CDB;
 
-/* ISSUE QUEUE */
-typedef struct ISSUE_QUEUE_NODE { // implement queue as linked list since can be arbitrary size
+/* INSTRUCTION LIST */
+typedef struct INSTR_NODE { // implement as linked list since can be arbitrary size
   int                       RS_entry; // index of reserv_stats array
-  struct ISSUE_QUEUE_NODE   *next;
-} issue_queue_node_t;
+  struct INSTR_NODE         *next;
+} instr_node_t;
 
-issue_queue_node_t *issue_queue_head = NULL;
-int issue_queue_size = 0;
+instr_node_t *instr_list_head = NULL;
+int instr_list_size = 0;
 
 /* ECE552 Assignment 3 - END CODE */
 
@@ -151,7 +151,7 @@ void                h_IFQ_push(instruction_t*);
 instruction_t*      h_IFQ_head();
 instruction_t*      h_IFQ_pop();
 bool                h_rs_entry_ready(int);
-void                h_issue_queue_push(int);
+void                h_instr_list_push(int);
 
 void h_alloc_rs_entry(res_stat_t*, int, instruction_t*, int);
 void h_alloc_fu_unit(int, int, int);
@@ -225,7 +225,6 @@ void CDB_To_retire(int current_cycle) {
  * 	None
  */
 void execute_To_CDB(int current_cycle) {
-
   
 
 }
@@ -243,15 +242,15 @@ void execute_To_CDB(int current_cycle) {
  * 	None
  */
 void issue_To_execute(int current_cycle) { // I haven't figured out if we can only send one int and one fp to exec per cycle or as many as there are FU ready - Christian
-  issue_queue_node_t *node;
+  instr_node_t *node;
 
-  if (issue_queue_size == 0) {
-    printf("issue queue is empty, no instrs to issue\n");
+  if (instr_list_size == 0) {
+    printf("instr list is empty, no instrs to issue\n");
   } else {
-    printf("issue queue is not empty, finding ready instr to issue...\n");
+    printf("instr list is not empty, finding ready instr to issue...\n");
   }
 
-  for (node = issue_queue_head; node != NULL; node = node->next) {
+  for (node = instr_list_head; node != NULL; node = node->next) {
     assert(reserv_stats[node->RS_entry].instr != NULL);
     // if instruction is already in FU, continue
     if (reserv_stats[node->RS_entry].executing) {
@@ -347,7 +346,7 @@ void dispatch_To_issue(int current_cycle) {
     if (!reserv_stats[i].busy) {
       printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
       h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle);
-      h_issue_queue_push(i); // push to issue queue to record age of instructions
+      h_instr_list_push(i); // push to issue queue to record age of instructions
       h_IFQ_pop();
       printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
       found_available_rs_entry = true;
@@ -568,18 +567,18 @@ bool h_rs_entry_ready(int RS_entry) {
   return true;
 }
 
-void h_issue_queue_push(int RS_entry) {
-  issue_queue_node_t *node = (issue_queue_node_t*)malloc(sizeof(issue_queue_node_t));
+void h_instr_list_push(int RS_entry) {
+  instr_node_t *node = (instr_node_t*)malloc(sizeof(instr_node_t));
   node->RS_entry = RS_entry;
   node->next = NULL;
 
-  if (issue_queue_head == NULL) {
-    issue_queue_head = node;
+  if (instr_list_head == NULL) {
+    instr_list_head = node;
   } else {
-    issue_queue_node_t *ptr;
-    for (ptr = issue_queue_head; ptr->next != NULL; ptr = ptr->next){}
+    instr_node_t *ptr;
+    for (ptr = instr_list_head; ptr->next != NULL; ptr = ptr->next){}
     ptr->next = node;
   }
-  issue_queue_size++;
+  instr_list_size++;
 }
 /* ECE552 Assignment 3 - END CODE */
