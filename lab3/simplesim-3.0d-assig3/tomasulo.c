@@ -121,6 +121,7 @@ typedef struct RESERVATION_STATION {
   int               R[NUM_OUTPUT_REGS];
   int               T[NUM_INPUT_REGS];
   int               inst_cycle; // cycle this entry is instantiated (allocated)
+  bool              writing_CDB;
 } res_stat_t;
 
 res_stat_t reserv_stats[RESERV_INT_SIZE + RESERV_FP_SIZE];
@@ -239,6 +240,41 @@ void CDB_To_retire(int current_cycle) {
  */
 void execute_To_CDB(int current_cycle) {
   /* ECE552 Assignment 3 - BEGIN CODE */
+
+  // check for completed instructions (or moved to CDB)
+  // free their RS and FU
+  instr_node_t* node, *temp;
+  int FU_index;
+  for (node = instr_list_head; node != NULL; node = node->next) {
+    FU_index = reserv_stats[node->RS_entry].FU_unit;
+    if (FU_index == -1) continue;
+    if (func_units[FU_index].cycles_to_completion == 0) {
+      if (!WRITES_CDB(func_units[FU_index].instr->op)) {
+        if (DEBUG_PRINTF) printf("completed instr does not write to CDB, deallocating FU and RS entry and removing from list...\n");
+        h_dealloc_fu_unit(FU_index);
+        h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
+        temp = node->next;
+        h_instr_list_remove(node);
+        node = temp;
+        if (node == NULL) break;
+      } else { // writes to CDB; only free RS and FU if instr is in CDB
+        if (reserv_stats[node->RS_entry].writing_CDB) {
+          if (DEBUG_PRINTF) printf("instr is in CDB, deallocating FU and RS entry and removing from list...\n");
+          h_dealloc_fu_unit(FU_index);
+          h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
+          temp = node->next;
+          h_instr_list_remove(node);
+          node = temp;
+          if (node == NULL) break;
+        } else {
+          continue;
+        }
+      }
+    } else {
+      continue;
+    }
+  }
+
   // advance all instrs in FU units by 1 cycle
   for (int i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
     if (func_units[i].rs_num != -1) {
@@ -247,10 +283,8 @@ void execute_To_CDB(int current_cycle) {
     h_advance_fu_unit(i, 1);
   }
 
-  instr_node_t* node, *temp;
   // check for execution completion
   // check oldest instr first, since they get prio to enter CDB
-  int FU_index;
   instruction_t *instr;
   for (node = instr_list_head; node != NULL; node = node->next) {
     if (reserv_stats[node->RS_entry].executing) {
@@ -268,26 +302,14 @@ void execute_To_CDB(int current_cycle) {
         if (WRITES_CDB(func_units[FU_index].instr->op)) {
           // if CDB is free, write instr to CDB, otherwise wait
           if (h_CDB_free()) {
-            if (DEBUG_PRINTF) printf("CDB available, writing to CDB, and deallocating FU and RS entry and removing from list...\n");
+            if (DEBUG_PRINTF) printf("CDB available, writing to CDB...\n");
             h_write_CDB(instr, node->RS_entry);
-            h_dealloc_fu_unit(FU_index);
-            h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
-            temp = node->next;
-            h_instr_list_remove(node);
-            node = temp;
-            if (node == NULL) break;
           } else {
             if (DEBUG_PRINTF) printf("CDB busy, waiting...\n");
             continue;
           }
         } else {
-          if (DEBUG_PRINTF) printf("completed instr does not write to CDB, deallocating FU and RS entry and removing from list...\n");
-          h_dealloc_fu_unit(FU_index);
-          h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
-          temp = node->next;
-          h_instr_list_remove(node);
-          node = temp;
-          if (node == NULL) break;
+          if (DEBUG_PRINTF) printf("completed instr does not write to CDB\n");
         }
       }
     }
@@ -516,6 +538,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
     for (int j = 0; j < NUM_OUTPUT_REGS; j++) {reserv_stats[i].R[j] = -1;}
     for (int j = 0; j < NUM_INPUT_REGS; j++)  {reserv_stats[i].T[j] = -1;}
     reserv_stats[i].inst_cycle    = 0;
+    reserv_stats[i].writing_CDB   = false;
   }
 
   //initialize functional units
@@ -623,6 +646,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   }
 
   res_stat_entry->inst_cycle = inst_cycle;
+  res_stat_entry->writing_CDB = false;
 }
 void h_dealloc_rs_entry(res_stat_t* res_stat_entry) {
   res_stat_entry->busy        = false;
@@ -632,6 +656,7 @@ void h_dealloc_rs_entry(res_stat_t* res_stat_entry) {
   for (int i = 0; i < NUM_OUTPUT_REGS; i++) {res_stat_entry->R[i] = -1;}
   for (int i = 0; i < NUM_INPUT_REGS; i++)  {res_stat_entry->T[i] = -1;}
   res_stat_entry->inst_cycle  = 0;    
+  res_stat_entry->writing_CDB = false;
 }
 bool h_rs_entry_ready(int RS_entry) {
   for (int i = 0; i < NUM_INPUT_REGS; i++) {
@@ -696,5 +721,7 @@ bool h_CDB_free() {
 void h_write_CDB(instruction_t *instr, int T) {
   CDB.instr = instr;
   CDB.T = T;
+
+  reserv_stats[T].writing_CDB = true;
 }
 /* ECE552 Assignment 3 - END CODE */
