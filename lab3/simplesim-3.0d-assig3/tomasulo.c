@@ -210,6 +210,7 @@ void CDB_To_retire(int current_cycle) {
   // }
 
   if (!((CDB.instr == NULL) || (CDB.T == -1))) {
+    CDB.instr->tom_cdb_cycle = current_cycle;
     if (DEBUG_PRINTF) printf("broadcasting tag T = %d from CDB...\n", CDB.T);
   }
 
@@ -327,7 +328,10 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
     }
 
     // if instruction is ready, move to execute
-    if (h_rs_entry_ready(node->RS_entry)) {
+    if (h_rs_entry_ready(node->RS_entry)) { // checking if operands are ready
+            if (reserv_stats[node->RS_entry].instr->tom_issue_cycle == 0) {
+                reserv_stats[node->RS_entry].instr->tom_issue_cycle = current_cycle;
+            }
       if (DEBUG_PRINTF) printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
       // find available FU unit
       bool found_available_fu_unit = false;
@@ -350,6 +354,7 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
           h_alloc_fu_unit(i, node->RS_entry, cycles_to_completion);
           found_available_fu_unit = true;
           if (DEBUG_PRINTF) printf("found available fu unit!\n");
+          reserv_stats[node->RS_entry].instr->tom_execute_cycle = current_cycle + 1;
           break;
         }
       }
@@ -383,7 +388,6 @@ void dispatch_To_issue(int current_cycle) {
   // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
   // generally, pop operations return the head - Richard
   assert (dispatched_instr != NULL);
-  dispatched_instr->tom_dispatch_cycle++; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
 
   // conditional and unconditional branches do not get dispatched to RS
   // so simply pop from IFQ and skip
@@ -418,6 +422,7 @@ void dispatch_To_issue(int current_cycle) {
       h_IFQ_pop();
       if (DEBUG_PRINTF) printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
       found_available_rs_entry = true;
+      dispatched_instr->tom_dispatch_cycle = current_cycle; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
       break;
     }
   }
@@ -438,7 +443,11 @@ void fetch(instruction_trace_t* trace) {
   instruction_t* fetched_instr;
   do {
     fetched_instr = get_instr(trace, ++fetch_index); // get_instr stated in instr.h
-                                                     // pre-increment fetch_index bc it 
+    fetched_instr->tom_issue_cycle = 0;
+    fetched_instr->tom_execute_cycle = 0;
+    fetched_instr->tom_dispatch_cycle = 0;
+    fetched_instr->tom_cdb_cycle = 0;                                                   
+                                                    // pre-increment fetch_index bc it 
                                                      // is index of last fetched isntr
   } while (IS_TRAP(fetched_instr->op)); // skip trap instructions
 
@@ -468,6 +477,7 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
   } else {
     if (DEBUG_PRINTF) printf("IFQ full\n");
   }
+    dispatch_To_issue(current_cycle); 
 }
 /* ECE552 Assignment 3 - END CODE */
 
@@ -526,7 +536,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
     CDB_To_retire(cycle);
     execute_To_CDB(cycle);
     issue_To_execute(cycle);
-    dispatch_To_issue(cycle);
+    //dispatch_To_issue(cycle);
     fetch_To_dispatch(trace, cycle);
     if (is_simulation_done(sim_num_insn)) break;
     cycle++;
