@@ -205,17 +205,15 @@ static bool is_simulation_done(counter_t sim_insn) {
  * 	None
  */
 void CDB_To_retire(int current_cycle) {
-  // if (CDB.instr != NULL) {
-  //   CDB.instr->tom_cdb_cycle++; // count num cycles instr has been in CDB // I've understood the assignment to be different than this - Christian
-  // }
-
   if (!((CDB.instr == NULL) || (CDB.T == -1))) {
     CDB.instr->tom_cdb_cycle = current_cycle;
     if (DEBUG_PRINTF) printf("broadcasting tag T = %d from CDB...\n", CDB.T);
+  } else {
+    return; // CDB is empty
   }
 
   // broadcast to reservation stations
-  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE  ; i++) { // doesnt this segfault if we don't have it filled, or is it init at some value far all indeces? - Christian
+  for (int i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE  ; i++) {
     for (int j = 0; j < NUM_INPUT_REGS; j++) {
       if (reserv_stats[i].T[j] == CDB.T) reserv_stats[i].T[j] = -1;
     }
@@ -310,7 +308,7 @@ void execute_To_CDB(int current_cycle) {
  * Returns:
  * 	None
  */
-void issue_To_execute(int current_cycle) { // I haven't figured out if we can only send one int and one fp to exec per cycle or as many as there are FU ready - Christian
+void issue_To_execute(int current_cycle) {
   instr_node_t *node;
 
   if (instr_list_size == 0) {
@@ -329,9 +327,6 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
 
     // if instruction is ready, move to execute
     if (h_rs_entry_ready(node->RS_entry)) { // checking if operands are ready
-            if (reserv_stats[node->RS_entry].instr->tom_issue_cycle == 0) {
-                reserv_stats[node->RS_entry].instr->tom_issue_cycle = current_cycle;
-            }
       if (DEBUG_PRINTF) printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
       // find available FU unit
       bool found_available_fu_unit = false;
@@ -348,12 +343,16 @@ void issue_To_execute(int current_cycle) { // I haven't figured out if we can on
         end_idx = FU_INT_SIZE + FU_FP_SIZE;
         cycles_to_completion = FU_FP_LATENCY;
         if (DEBUG_PRINTF) printf("uses fp FU...\n");
+      } else {
+        if (DEBUG_PRINTF) printf("ERROR: dispatched instr uses does not INT nor FP FU\n");
       }
       for (int i = start_idx; i < end_idx; i++) {
         if (func_units[i].instr == NULL) {
           h_alloc_fu_unit(i, node->RS_entry, cycles_to_completion);
           found_available_fu_unit = true;
           if (DEBUG_PRINTF) printf("found available fu unit!\n");
+
+          // instr enters execute the cycle after it ends issue --- so the first cycle it will be using a FU
           reserv_stats[node->RS_entry].instr->tom_execute_cycle = current_cycle + 1;
           break;
         }
@@ -385,8 +384,6 @@ void dispatch_To_issue(int current_cycle) {
   }
 
   instruction_t* dispatched_instr = h_IFQ_head(); 
-  // thinking about why h_pop returns head if we already have to use h_head to check if a dispatch is possible - Christian
-  // generally, pop operations return the head - Richard
   assert (dispatched_instr != NULL);
 
   // conditional and unconditional branches do not get dispatched to RS
@@ -417,12 +414,14 @@ void dispatch_To_issue(int current_cycle) {
   for (int i = start_idx; i < end_idx; i++) {
     if (!reserv_stats[i].busy) {
       if (DEBUG_PRINTF) printf("found available RS entry at index %d! allocating and popping from IFQ...\n", i);
-      h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle);
+      h_alloc_rs_entry(&reserv_stats[i], i, dispatched_instr, current_cycle); // will also set map table
       h_instr_list_push(i); // push to issue queue to record age of instructions
       h_IFQ_pop();
       if (DEBUG_PRINTF) printf("allocated and popped! IFQ_instr_count: %d; head: %d; tail: %d\n", IFQ_instr_count, IFQ_head, IFQ_tail);
       found_available_rs_entry = true;
-      dispatched_instr->tom_dispatch_cycle = current_cycle; // I also can't make sense of this because this increments, but we should only record when insn enter a stage - Christian
+
+      // instr enters issue the cycle after it ends dispatch --- so the first cycle it will be using a RS entry
+      dispatched_instr->tom_issue_cycle = current_cycle+1;
       break;
     }
   }
@@ -477,7 +476,16 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
   } else {
     if (DEBUG_PRINTF) printf("IFQ full\n");
   }
-    dispatch_To_issue(current_cycle); 
+
+  // instr enters dispatch when it makes it into the IFQ
+  instruction_t *instr;
+  for (int i = 0; i < INSTR_QUEUE_SIZE; i++) {
+    instr = IFQ[i];
+    if (instr == NULL) continue;
+    if (instr->tom_dispatch_cycle == 0) instr->tom_dispatch_cycle = current_cycle;
+  }
+
+  dispatch_To_issue(current_cycle); 
 }
 /* ECE552 Assignment 3 - END CODE */
 
@@ -501,7 +509,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
   }
 
   //initialize reservation stations
-  for (i = 0; i < RESERV_INT_SIZE+RESERV_FP_SIZE; i++) {
+  for (i = 0; i < RESERV_INT_SIZE + RESERV_FP_SIZE; i++) {
     reserv_stats[i].busy          = false;
     reserv_stats[i].executing     = false;
     reserv_stats[i].FU_unit       = -1;
@@ -518,7 +526,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
     func_units[i].rs_num                 = -1;
   }
 
-  //initialize map_table to no producers
+  //initialize map_table
   int reg;
   for (reg = 0; reg < MD_TOTAL_REGS; reg++) {
     map_table[reg] = -1;
@@ -549,11 +557,9 @@ counter_t runTomasulo(instruction_trace_t* trace)
 /* ECE552 Assignment 3 - BEGIN CODE */
 // this section contains helper functions
 bool h_IFQ_full() {
-  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE); // I dont get this? Christian
+  assert (IFQ_instr_count <= INSTR_QUEUE_SIZE); 
   assert (0 <= IFQ_instr_count);
-  return IFQ_instr_count >= INSTR_QUEUE_SIZE; // If assert is to makes sense this should be == and not >=
-
-  // assert is for sanity checks; logic should be 'correct' even if asserts are not there - Richard
+  return IFQ_instr_count >= INSTR_QUEUE_SIZE; 
 }
 bool h_IFQ_empty() {
   assert (IFQ_instr_count <= INSTR_QUEUE_SIZE);
@@ -598,7 +604,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   res_stat_entry->instr       = instr;
 
   // T0, T1, T2: input registers
-  for (int i = 0; i < NUM_INPUT_REGS; i++) { // should probably use NUM_INPUT_REGS instead of 3 - Christian
+  for (int i = 0; i < NUM_INPUT_REGS; i++) {
     if (instr->r_in[i] != -1) {
       res_stat_entry->T[i] = map_table[instr->r_in[i]];
     } else {
@@ -609,7 +615,7 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
   // R0, R1: output registers (stores don't have output registers)
   // also update map table
   if (!IS_STORE(instr->op)) {
-    for (int i = 0; i < NUM_OUTPUT_REGS; i++) { // should probably use NUM_OUTPUT_REGS instead of 2 - Christian
+    for (int i = 0; i < NUM_OUTPUT_REGS; i++) { 
       if (instr->r_out[i] != -1) {
         res_stat_entry->R[i] = instr->r_out[i];
         map_table[instr->r_out[i]] = res_stat_index;
