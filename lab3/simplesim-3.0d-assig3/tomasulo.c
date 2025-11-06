@@ -142,7 +142,6 @@ typedef struct INSTR_NODE { // implement as linked list since can be arbitrary s
 
 instr_node_t *instr_list_head = NULL;
 int instr_list_size = 0;
-
 /* ECE552 Assignment 3 - END CODE */
 
 /* ECE552 Assignment 3 - BEGIN CODE */
@@ -166,10 +165,8 @@ void                h_instr_list_remove(instr_node_t*);
 
 bool                h_CDB_free();
 void                h_write_CDB(instruction_t*, int);
-
 /* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Checks if simulation is done by finishing the very last instruction
@@ -180,6 +177,7 @@ void                h_write_CDB(instruction_t*, int);
  * 	True: if simulation is finished
  */
 static bool is_simulation_done(counter_t sim_insn) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   if (fetch_index < sim_insn) return false; // have not fetched the last instr yet
   if (!h_IFQ_empty()) return false; // have not handled all instrs in IFQ yet
 
@@ -192,10 +190,9 @@ static bool is_simulation_done(counter_t sim_insn) {
   if (CDB.T != -1) return false;
 
   return true;
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Retires the instruction from writing to the Common Data Bus
@@ -205,6 +202,7 @@ static bool is_simulation_done(counter_t sim_insn) {
  * 	None
  */
 void CDB_To_retire(int current_cycle) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   if (!((CDB.instr == NULL) || (CDB.T == -1))) {
     CDB.instr->tom_cdb_cycle = current_cycle;
     if (DEBUG_PRINTF) printf("broadcasting tag T = %d from CDB...\n", CDB.T);
@@ -227,10 +225,10 @@ void CDB_To_retire(int current_cycle) {
   // clear CDB
   CDB.T     = -1;
   CDB.instr = NULL;
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
+
 /* 
  * Description: 
  * 	Moves an instruction from the execution stage to common data bus (if possible)
@@ -240,8 +238,16 @@ void CDB_To_retire(int current_cycle) {
  * 	None
  */
 void execute_To_CDB(int current_cycle) {
-  instr_node_t* node, *temp;
+  /* ECE552 Assignment 3 - BEGIN CODE */
+  // advance all instrs in FU units by 1 cycle
+  for (int i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
+    if (func_units[i].rs_num != -1) {
+      if (DEBUG_PRINTF) printf("instr in RS entry %d is executing...\n", func_units[i].rs_num);
+    }
+    h_advance_fu_unit(i, 1);
+  }
 
+  instr_node_t* node, *temp;
   // check for execution completion
   // check oldest instr first, since they get prio to enter CDB
   int FU_index;
@@ -286,18 +292,9 @@ void execute_To_CDB(int current_cycle) {
       }
     }
   }
-
-  // advance all instrs in FU units by 1 cycle
-  for (int i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
-    if (func_units[i].rs_num != -1) {
-      if (DEBUG_PRINTF) printf("instr in RS entry %d is executing...\n", func_units[i].rs_num);
-    }
-    h_advance_fu_unit(i, 1);
-  }
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves instruction(s) from the issue to the execute stage (if possible). We prioritize old instructions
@@ -309,6 +306,7 @@ void execute_To_CDB(int current_cycle) {
  * 	None
  */
 void issue_To_execute(int current_cycle) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   instr_node_t *node;
 
   if (instr_list_size == 0) {
@@ -362,10 +360,9 @@ void issue_To_execute(int current_cycle) {
       if (DEBUG_PRINTF) printf("instr in RS entry %d is not ready\n", node->RS_entry);
     }
   }
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Moves instruction(s) from the dispatch stage to the issue stage
@@ -375,6 +372,7 @@ void issue_To_execute(int current_cycle) {
  * 	None
  */
 void dispatch_To_issue(int current_cycle) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   // if IFQ empty don't do anything
   if (h_IFQ_empty()) {
     if (DEBUG_PRINTF) printf("IFQ empty, no instrs to dispatch\n");
@@ -426,10 +424,10 @@ void dispatch_To_issue(int current_cycle) {
     }
   }
   if (!found_available_rs_entry) if (DEBUG_PRINTF) printf("no available RS entry!\n");
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
+
 /* 
  * Description: 
  * 	Grabs an instruction from the instruction trace (if possible)
@@ -439,6 +437,7 @@ void dispatch_To_issue(int current_cycle) {
  * 	None
  */
 void fetch(instruction_trace_t* trace) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   instruction_t* fetched_instr;
   do {
     fetched_instr = get_instr(trace, ++fetch_index); // get_instr stated in instr.h
@@ -455,10 +454,9 @@ void fetch(instruction_trace_t* trace) {
   } else {
     if (DEBUG_PRINTF) printf("fetch_index: %d, exceeds sim_num_insn: %d\n", fetch_index, (int)sim_num_insn);
   }
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Calls fetch and dispatches an instruction at the same cycle (if possible)
@@ -469,6 +467,7 @@ void fetch(instruction_trace_t* trace) {
  * 	None
  */
 void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   if (!h_IFQ_full()) {
     if (DEBUG_PRINTF) printf("IFQ not full; IFQ_instr_count: %d; fetching...\n", IFQ_instr_count); // to remove
     fetch(trace);
@@ -486,10 +485,9 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
   }
 
   dispatch_To_issue(current_cycle); 
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
 
-/* ECE552 Assignment 3 - BEGIN CODE */
 /* 
  * Description: 
  * 	Performs a cycle-by-cycle simulation of the 4-stage pipeline
@@ -502,6 +500,7 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
  */
 counter_t runTomasulo(instruction_trace_t* trace)
 {
+  /* ECE552 Assignment 3 - BEGIN CODE */
   //initialize instruction queue
   int i;
   for (i = 0; i < INSTR_QUEUE_SIZE; i++) {
@@ -544,15 +543,15 @@ counter_t runTomasulo(instruction_trace_t* trace)
     CDB_To_retire(cycle);
     execute_To_CDB(cycle);
     issue_To_execute(cycle);
-    //dispatch_To_issue(cycle);
-    fetch_To_dispatch(trace, cycle);
+    fetch_To_dispatch(trace, cycle); // will call dispatch_To_issue
     if (is_simulation_done(sim_num_insn)) break;
     cycle++;
   }
   
   return cycle;
+  /* ECE552 Assignment 3 - END CODE */
 }
-/* ECE552 Assignment 3 - END CODE */
+
 
 /* ECE552 Assignment 3 - BEGIN CODE */
 // this section contains helper functions
