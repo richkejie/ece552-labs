@@ -324,6 +324,7 @@ void issue_To_execute(int current_cycle) {
     }
 
     // if instruction is ready, move to execute
+    printf("\nchecking rs entry in cycle: %d\n", current_cycle);
     if (h_rs_entry_ready(node->RS_entry)) { // checking if operands are ready
       if (DEBUG_PRINTF) printf("instr in RS entry %d is ready! finding available FU...\n", node->RS_entry);
       // find available FU unit
@@ -498,6 +499,7 @@ void fetch_To_dispatch(instruction_trace_t* trace, int current_cycle) {
  * Extra Notes:
  * 	sim_num_insn: the number of instructions in the trace
  */
+static int  cycle = 1;
 counter_t runTomasulo(instruction_trace_t* trace)
 {
   /* ECE552 Assignment 3 - BEGIN CODE */
@@ -537,7 +539,7 @@ counter_t runTomasulo(instruction_trace_t* trace)
   
   if (DEBUG_PRINTF) printf("structures initialized!\n\n\n");
 
-  int cycle = 1;
+  // int cycle = 1;
   while (true) {
     if (DEBUG_PRINTF) printf("\ncycle %d:\n", cycle);
     CDB_To_retire(cycle);
@@ -604,10 +606,14 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
 
   // T0, T1, T2: input registers
   for (int i = 0; i < NUM_INPUT_REGS; i++) {
+    PRINT_INST(stdout,instr,"Debug h_rs_alloc: ",cycle);
+    printf("input operand: %d is register: %d    ",i,instr->r_in[i]);
     if (instr->r_in[i] != -1) {
       res_stat_entry->T[i] = map_table[instr->r_in[i]];
+      printf("instruction tag is now map table value: %d\n",map_table[instr->r_in[i]]);
     } else {
       res_stat_entry->T[i] = -1;
+      printf("instruction didn't use map table value for this operand\n");
     }
   }
 
@@ -617,7 +623,9 @@ void h_alloc_rs_entry(res_stat_t* res_stat_entry, int res_stat_index, instructio
     for (int i = 0; i < NUM_OUTPUT_REGS; i++) { 
       if (instr->r_out[i] != -1) {
         res_stat_entry->R[i] = instr->r_out[i];
+        printf("output register: %d now dependent\n",instr->r_out[i]);
         map_table[instr->r_out[i]] = res_stat_index;
+        printf("map table: %d now dependent\n",map_table[instr->r_out[i]]);
       }
     }
   }
@@ -635,7 +643,10 @@ void h_dealloc_rs_entry(res_stat_t* res_stat_entry) {
 }
 bool h_rs_entry_ready(int RS_entry) {
   for (int i = 0; i < NUM_INPUT_REGS; i++) {
-    if (reserv_stats[RS_entry].T[i] != -1) {
+    printf("tag value: %d for reservation station entry: %d with register operand: %d\n",reserv_stats[RS_entry].T[i],RS_entry,i);
+    // md_print_insn(reserv_stats[RS_entry].instr);
+    PRINT_INST(stdout,reserv_stats[RS_entry].instr,"Debug h_rs_ready: ",cycle);
+    if (reserv_stats[RS_entry].T[i] != -1) { 
       return false;
     }
   }
