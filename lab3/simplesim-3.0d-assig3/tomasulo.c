@@ -209,7 +209,7 @@ void CDB_To_retire(int current_cycle) {
     return; // CDB is empty
   } else {
     CDB.instr->tom_cdb_cycle = current_cycle;
-    if (DEBUG_PRINTF) printf("broadcasting tag T = %d from CDB...\n", CDB.T);
+    // PRINT_INST(stdout, CDB.instr, "broadcasting from cdb: ", current_cycle);
   }
 
   // broadcast to reservation stations
@@ -244,7 +244,9 @@ void execute_To_CDB(int current_cycle) {
   // advance all instrs in FU units by 1 cycle
   for (int i = 0; i < FU_INT_SIZE + FU_FP_SIZE; i++) {
     if (func_units[i].rs_num != -1) {
-      if (DEBUG_PRINTF) printf("instr in RS entry %d is executing...\n", func_units[i].rs_num);
+      // if (DEBUG_PRINTF) printf("instr in RS entry %d is executing...\n", func_units[i].rs_num);
+      // PRINT_INST(stdout, func_units[i].instr, "executing %d ", current_cycle);
+      // printf("cycles left: %d\n", func_units[i].cycles_to_completion);
     }
     h_advance_fu_unit(i, 1);
   }
@@ -263,21 +265,25 @@ void execute_To_CDB(int current_cycle) {
       assert(func_units[FU_index].instr == reserv_stats[node->RS_entry].instr);
       assert(func_units[FU_index].rs_num == node->RS_entry);
 
-      if (func_units[FU_index].cycles_to_completion == 0) {
-        if (DEBUG_PRINTF) printf("instr in RS entry %d has finished executing!\n", node->RS_entry);
+      if (func_units[FU_index].cycles_to_completion == 0) { 
+        // PRINT_INST(stdout, func_units[FU_index].instr, "finished executing: ", current_cycle); 
         // this instr has finished executing
         // check if it needs to write to CDB
         if (WRITES_CDB(func_units[FU_index].instr->op)) {
           // if CDB is free, write instr to CDB, otherwise wait
           if (h_CDB_free()) {
             if (DEBUG_PRINTF) printf("CDB available, writing to CDB, and deallocating FU and RS entry and removing from list...\n");
+            // PRINT_INST(stdout, reserv_stats[node->RS_entry].instr, "writing to cdb: ", current_cycle);
             h_write_CDB(instr, reserv_stats[node->RS_entry].tag);
             h_dealloc_fu_unit(FU_index);
             h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
-            temp = node->next;
+            // temp = node->next;
             h_instr_list_remove(node);
-            node = temp;
-            if (node == NULL) break;
+            // node = temp;
+            // if (node == NULL) {
+            //   printf("end of linked list\n");
+            //   break;
+            // };
           } else {
             if (DEBUG_PRINTF) printf("CDB busy, waiting...\n");
             continue;
@@ -286,10 +292,13 @@ void execute_To_CDB(int current_cycle) {
           if (DEBUG_PRINTF) printf("completed instr does not write to CDB, deallocating FU and RS entry and removing from list...\n");
           h_dealloc_fu_unit(FU_index);
           h_dealloc_rs_entry(&reserv_stats[node->RS_entry]);
-          temp = node->next;
+          // temp = node->next;
           h_instr_list_remove(node);
-          node = temp;
-          if (node == NULL) break;
+          // node = temp;
+          // if (node == NULL) {
+          //   printf("end of linked list\n");
+          //   break;
+          // };
         }
       }
     }
