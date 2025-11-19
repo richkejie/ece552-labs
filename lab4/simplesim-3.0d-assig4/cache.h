@@ -98,6 +98,25 @@
    speed block access, this macro decides if a cache is "highly associative" */
 #define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
 
+/* ECE552 Assignment 4 - BEGIN CODE */
+
+// definitions for stride prefetcher
+enum rpt_state {
+  RPT_INITIAL,
+	RPT_TRANSIENT,
+	RPT_STEADY,
+	RPT_NOPREDICTION
+};
+struct rpt_t{
+	md_addr_t *tag;
+	md_addr_t *prev_addr;
+	md_addr_t *stride;
+	enum rpt_state *state;
+};
+
+/* ECE552 Assignment 4 - END CODE */
+
+
 /* cache replacement policy */
 enum cache_policy {
   LRU,		/* replace least recently used block (perfect LRU) */

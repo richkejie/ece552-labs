@@ -528,7 +528,94 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
 
 /* Stride Prefetcher */
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	; 
+	
+  // static makes this variable persist
+  static rpt_t *RPT = null;
+
+  // from 3.1 of handout:
+  // prefetch_type indicates the number of entries in the RPT
+  // for stride prefetcher
+  int num_rpt_entries = cp->prefetch_type;
+
+  // build rpt table if it does not exist
+  if (RPT == null) {
+    RPT = (rpt_t*)malloc(sizeof(rpt_t));
+    // calloc to initialize arrays to zero
+    RPT->tag = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
+    RPT->prev_addr = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
+    RPT->stride = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
+    RPT->state = (enum rpt_state*)calloc(num_rpt_entries, sizeof(enum rpt_state));
+  }
+
+  // index into RPT using PC
+  md_addr_t PC = get_PC();
+  // from 4.2.2 of handout: drop lower bits of PC that are always zero
+  int index = (PC>>2) % num_rpt_entries;
+
+  md_addr_t tag = CACHE_TAG(cp, addr);
+  // update RPT entry (or allocate an entry if miss)
+  if (RPT->tag[index] != tag) {
+    // miss
+    RPT->tag[index] = tag;
+    RPT->prev_addr[index] = CACHE_BADDR(cp, addr);
+    RPT->stride[index] = 0;
+    RPT->state[index] = RPT_INITIAL;
+  } else {
+    // hit
+    md_addr_t curr_stride = CACHE_BADDR(cp, addr) - RPT->prev_addr[index];
+    RPT->prev_addr[index] = addr;
+    bool same_stride = (curr_stride == RPT->stride[index]);
+
+    switch (RPT->state[index]) {
+      case RPT_INITIAL:
+        if (same_stride) {
+          RPT->state[index] = RPT_STEADY;
+        } else {
+          RPT->state[index] = RPT_TRANSIENT;
+          RPT->stride[index] = curr_stride;
+        }
+        break;
+      case RPT_STEADY:
+        if (same_stride) {
+          // no change, stay in steady state
+          RPT->state[index] = RPT_STEADY;
+        } else {
+          RPT->state[index] = RPT_INITIAL;
+          // don't update stride
+        }
+        break;
+      case RPT_TRANSIENT:
+        if (same_stride) {
+          RPT->state[index] = RPT_STEADY;
+        } else {
+          RPT->state[index] = RPT_NOPREDICTION;
+          RPT->stride[index] = curr_stride;
+        }
+        break;
+      case RPT_NOPREDICTION:
+        if (same_stride) {
+          RPT->state[index] = RPT_TRANSIENT;
+        } else {
+          // stay in no prediction state
+          RPT->state[index] = RPT_NOPREDICTION;
+          RPT->stride[index] = curr_stride;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  // generate prefetch if in INITIAL, TRANSIENT, or STEADY state
+  md_addr_t prefetch_address = CACHE_BADDR(cp, addr+RPT->stride[index]);
+  if ((RPT->state[index] == RPT_INITIAL) ||
+      (RPT->state[index] == RPT_TRANSIENT) ||
+      (RPT->state[index] == RPT_STEADY)) {
+    // only prefetch if block not in cache --- Piazza
+    if(!cache_probe(cp, prefetch_address)) {
+      cache_access(cp, Read, prefetch_address, NULL, cp->bsize, 0, NULL, NULL, 1);
+    }
+  }
 }
 
 
