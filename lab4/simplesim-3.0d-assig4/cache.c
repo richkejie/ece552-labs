@@ -507,7 +507,18 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
 
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	; 
+  /* ECE552 Assignment 4 - BEGIN CODE */
+	
+  md_addr_t block_address = CACHE_BADDR(cp, addr);
+  md_addr_t next_block_address = CACHE_BADDR(cp, addr + cp->bsize);
+
+  // only prefetch if block not in cache --- Piazza
+  if(!cache_probe(cp, next_block_address)) {
+    cache_access(cp, Read, next_block_address, NULL, cp->bsize, 0, NULL, NULL, 1);
+  }
+
+  
+  /* ECE552 Assignment 4 - END CODE */
 }
 
 /* Open Ended Prefetcher */
