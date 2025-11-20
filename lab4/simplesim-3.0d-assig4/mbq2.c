@@ -1,40 +1,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define ITERATIONS 100
+/*
+	Microbenchmark to test stride prefetcher
 
-//Microbenchmark program to test for reliability of stride prefetching
-
-// /cad2/ece552f/compiler/bin/ssbig-na-sstrix-gcc mbq2.c -O0 -o mbq2
+	compilation cmd:
+		/cad2/ece552f/compiler/bin/ssbig-na-sstrix-gcc mbq2.c -O0 -o mbq2
+*/
 
 int main(void){
 		
 /*
-	initialize the registers to store addresses
-	this way, by incrementing them, we can index consequtive memory blocks
+	initialize the registers to iterate over memory addresses
 */
 
 	asm("move	$3,$sp			");
 
-    asm("addu	$7, $sp, 2560000	"); //address register for case 2
-	asm("addu	$10, $sp, 5120000	"); //alternate address register for case 2
+    asm("addu	$7, $sp, 25600000	"); //address register for case 2
+	asm("addu	$10, $sp, 51200000	"); //alternate address register for case 2
+
+	asm("addu	$5, $sp, 12800000	");
+	asm("addu	$9, $sp, 51200000	");
 
 /*
-	Set the loop interations
+	Case 1: We will access memory incrementing at alternating one and two block sizes
 */
-
-	asm("addu	$5, $sp, 1280000	");
-	asm("addu	$9, $sp, 5120000	");
-
-/*
-	Case 1: We will fetch unequal strides of 1,2,1,2... block sizes
-*/
-	asm("move	$6, $0			"); //set a flag to toggle between 1 and 0
+	asm("move	$6, $0			"); //set a flag to alternate between incrementing by one and two block sizes
 	asm("$L101:	sltu	$2,$3,$5	"); 
 	asm("beq	$2, $0, $L201		");
 	asm("lw		$4, 0($3)		"); //memory access
-	asm("beq	$6, $0, $L102		"); //check flag so every 2nd time, index increments by 2 blocks
-	asm("addu	$3, $3, 64		"); //increment index by 1 (i.e., 1 block size)
+	asm("beq	$6, $0, $L102		"); //check flag 
+	asm("addu	$3, $3, 64		"); //increment index by 1 block size
 	asm("addu 	$6, $0, 0		"); //update flag
 	asm("j		$L101			");
 	asm("$L102:	addu	$3,$3,128	"); //increment by 2 block sizes
