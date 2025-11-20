@@ -1,32 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//Microbenchmark program to test for reliability of next line prefetching
+/*
+	Microbenchmark to test next-line prefetcher
 
-// /cad2/ece552f/compiler/bin/ssbig-na-sstrix-gcc mbq1.c -O0 -o mbq1
+	compilation cmd:
+		/cad2/ece552f/compiler/bin/ssbig-na-sstrix-gcc mbq1.c -O0 -o mbq1
+*/
 
 int main(void){
 		
 /*
-	initialize the registers to store addresses
-	this way, by incrementing them, we can index consequtive memory blocks
+	initialize the registers to iterate over memory addresses
 */
 
 	asm("move	$3,$sp");
 	asm("move	$6,$sp");
-	asm("addu	$6, $6, 12800000"); //$6 is used to Case 2
+	asm("addu	$6, $6, 12800000"); // $6 used in Scenario 2
 
-/*
-	Set the loop interations
-*/
-	asm("addu	$5, $sp, 12800000");
+	asm("addu	$5, $sp, 12800000"); // set the loop limits
 	asm("addu	$8, $sp, 25600000");
 
 /*
-	Case 1: Memory will jump two blocks at a time. This goes outside the next-line
-	        "fetch range", causing it to fail every time. This will iterate 100k times
-    
-            so should get ~100,000 dl1 cache misses here
+	Scenario 1: memory access will jump two blocks at a time (128)
+		This goes outside next-line fetch range, so data cache miss should occur every time
+		This will iterate 100k times so should get ~100,000 dl1 cache misses here
 // */
 	asm("$L101:	sltu	$2,$3,$5");
 	asm("beq	$2,$0,$L201");
@@ -35,12 +33,9 @@ int main(void){
 	asm("j	$L101");
 
 /*
-	Case 2: Memory will jump one blocks at a time. This is exactly the next block size
-		the prefetcher fetches. This should succeed every time. We can also use any 			
-        size below 64 (such as 32). As it's smaller than block size, it will be 		
-        prefetched by next-line. This loop will run 200k times. 
-
-        so should get ~0 dl1 cache misses here
+	Scenario 2: memory access will jump one block at a time (64)
+		The next-line prefetcher will work successfully
+		This loop will run 200k times so should get ~0 dl1 cache misses here
 */
   
 	asm("$L201:	sltu	$2,$6,$8");
