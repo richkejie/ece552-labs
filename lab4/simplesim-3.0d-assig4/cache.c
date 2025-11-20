@@ -505,6 +505,11 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
 
 }
 
+/* ECE552 Assignment 4 - BEGIN CODE */
+// moving function prototype since used in stride prefetcher
+md_addr_t get_PC();
+/* ECE552 Assignment 4 - END CODE*/
+
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
   /* ECE552 Assignment 4 - BEGIN CODE */
@@ -530,7 +535,7 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
 	
   // static makes this variable persist
-  static rpt_t *RPT = null;
+  static rpt_t *RPT = NULL;
 
   // from 3.1 of handout:
   // prefetch_type indicates the number of entries in the RPT
@@ -538,33 +543,37 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
   int num_rpt_entries = cp->prefetch_type;
 
   // build rpt table if it does not exist
-  if (RPT == null) {
+  if (RPT == NULL) {
     RPT = (rpt_t*)malloc(sizeof(rpt_t));
     // calloc to initialize arrays to zero
     RPT->tag = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
     RPT->prev_addr = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
     RPT->stride = (md_addr_t*)calloc(num_rpt_entries, sizeof(md_addr_t));
     RPT->state = (enum rpt_state*)calloc(num_rpt_entries, sizeof(enum rpt_state));
+    // for (int i = 0; i < num_rpt_entries; i++) {
+    //   RPT->state[i] = RPT_INITIAL;
+    // }
   }
 
   // index into RPT using PC
   md_addr_t PC = get_PC();
   // from 4.2.2 of handout: drop lower bits of PC that are always zero
-  int index = (PC>>2) % num_rpt_entries;
+  int index = (PC>>3) % num_rpt_entries;
 
   md_addr_t tag = CACHE_TAG(cp, addr);
   // update RPT entry (or allocate an entry if miss)
   if (RPT->tag[index] != tag) {
+  // if (0) {
     // miss
     RPT->tag[index] = tag;
-    RPT->prev_addr[index] = CACHE_BADDR(cp, addr);
+    RPT->prev_addr[index] = addr;
     RPT->stride[index] = 0;
     RPT->state[index] = RPT_INITIAL;
   } else {
     // hit
-    md_addr_t curr_stride = CACHE_BADDR(cp, addr) - RPT->prev_addr[index];
+    md_addr_t curr_stride = addr - RPT->prev_addr[index];
     RPT->prev_addr[index] = addr;
-    bool same_stride = (curr_stride == RPT->stride[index]);
+    int same_stride = (curr_stride == RPT->stride[index]);
 
     switch (RPT->state[index]) {
       case RPT_INITIAL:
@@ -618,7 +627,6 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
   }
 }
 
-
 /* cache x might generate a prefetch after a regular cache access to address addr */
 void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
 
@@ -642,7 +650,7 @@ void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
 
 }
 
-md_addr_t get_PC();
+
 
 /* print cache stats */
 void

@@ -107,12 +107,12 @@ enum rpt_state {
 	RPT_STEADY,
 	RPT_NOPREDICTION
 };
-struct rpt_t{
+typedef struct reference_predictor_table{
 	md_addr_t *tag;
 	md_addr_t *prev_addr;
 	md_addr_t *stride;
 	enum rpt_state *state;
-};
+} rpt_t;
 
 /* ECE552 Assignment 4 - END CODE */
 
