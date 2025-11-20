@@ -528,12 +528,80 @@ void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
 
 /* Open Ended Prefetcher */
 void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	; 
+  /* ECE552 Assignment 4 - BEGIN CODE */
+  static ghb_node_t *head = NULL;
+  static ghb_node_t *tail = NULL;
+  static it_node_t *index_table;
+  static int initialized = 0;
+  static md_addr_t prev_addr = 0;
+
+  // create tables if not initialized
+  if (!initialized) {
+    // initialize GHB
+    head = (ghb_node_t*)calloc(1,sizeof(ghb_node_t));
+    ghb_node_t *ptr = head, *new_ptr;
+    for (int i = 1; i < GHB_TABLE_SIZE; i++){
+      new_ptr = (ghb_node_t*)calloc(1,sizeof(ghb_node_t));
+      ptr->next = new_ptr;
+      new_ptr->prev = ptr;
+      ptr = new_ptr;
+    }
+    tail = ptr;
+    // initialize Index Table
+    index_table = (it_node_t*)calloc(1,sizeof(it_node_t));
+
+    // mark as initialized
+    initialized = 1;
+  }
+
+  // update index table entry
+  md_addr_t delta = addr - prev_addr;
+  prev_addr = addr;
+  md_addr_t index = 0;
+  index_table->old_delta = index_table->new_delta;
+  index_table->new_delta = delta;
+
+  // update GHB
+  // evict tail
+  tail = tail->prev;
+  free(tail->next);
+  tail->next = NULL;
+  // insert new head
+  ghb_node_t *ptr = (ghb_node_t*)calloc(1,sizeof(ghb_node_t));
+  ptr->next = head;
+  head->prev = ptr;
+  head = ptr;
+  ptr->delta = delta;
+
+  // prefetching logic
+  ghb_node_t *found[ISSUE_WIDTH] = {0};
+  // reverse traverse GHB to find matching deltas
+  for (ptr = tail; ptr != head->next; ptr = ptr->prev) {
+    if ((ptr->delta == index_table->old_delta) &&
+        (ptr->prev->delta == index_table->new_delta)) {
+      ptr = ptr->prev->prev;
+      for (int i = 0; i < ISSUE_WIDTH && ptr != NULL; i++) {
+        found[i] = ptr;
+        ptr = ptr->prev;
+      }
+      break;
+    }
+  }
+
+  // issue prefetches
+  for (int i = 0; i < ISSUE_WIDTH && found[i] != NULL; i++) {
+    md_addr_t prefetch_address = CACHE_BADDR(cp, addr + found[i]->delta);
+    // only prefetch if block not in cache --- Piazza
+    if(!cache_probe(cp, prefetch_address)) {
+      cache_access(cp, Read, prefetch_address, NULL, cp->bsize, 0, NULL, NULL, 1);
+    }
+  }
+	/* ECE552 Assignment 4 - END CODE*/
 }
 
 /* Stride Prefetcher */
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	
+	/* ECE552 Assignment 4 - BEGIN CODE */
   // static makes this variable persist
   static rpt_t *RPT = NULL;
 
@@ -625,6 +693,7 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
       cache_access(cp, Read, prefetch_address, NULL, cp->bsize, 0, NULL, NULL, 1);
     }
   }
+  /* ECE552 Assignment 4 - END CODE*/
 }
 
 /* cache x might generate a prefetch after a regular cache access to address addr */
