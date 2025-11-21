@@ -16,26 +16,26 @@ int main(void){
 
 	asm("move	$3,$sp			");
 
-    asm("addu	$7, $sp, 25600000	"); //address register for case 2
-	asm("addu	$10, $sp, 51200000	"); //alternate address register for case 2
+    asm("addu	$7, $sp, 25600000	"); 		// case 2
+	asm("addu	$10, $sp, 51200000	"); 		// case 2
 
 	asm("addu	$5, $sp, 12800000	");
 	asm("addu	$9, $sp, 51200000	");
 
 /*
-	Case 1: We will access memory incrementing at alternating one and two block sizes
+	Senario 1: We will access memory incrementing at alternating one and two block sizes
 */
-	asm("move	$6, $0			"); //set a flag to alternate between incrementing by one and two block sizes
-	asm("$L101:	sltu	$2,$3,$5	"); 
-	asm("beq	$2, $0, $L201		");
-	asm("lw		$4, 0($3)		"); //memory access
-	asm("beq	$6, $0, $L102		"); //check flag 
-	asm("addu	$3, $3, 64		"); //increment index by 1 block size
-	asm("addu 	$6, $0, 0		"); //update flag
-	asm("j		$L101			");
-	asm("$L102:	addu	$3,$3,128	"); //increment by 2 block sizes
-	asm("addu 	$6, $0, 1		"); //update flag
-	asm("j		$L101			");
+	asm("move	$6, $0			"); 			// set flag: alternate between 1 and 2 block size increments
+	asm("$SCEN1_1:	sltu	$2,$3,$5	"); 
+	asm("beq	$2, $0, $SCEN2_1		");
+	asm("lw		$4, 0($3)		"); 			// memory access
+	asm("beq	$6, $0, $SCEN1_2		"); 	// check flag 
+	asm("addu	$3, $3, 64		"); 			// increment index by 1 block size
+	asm("addu 	$6, $0, 0		"); 			
+	asm("j		$SCEN1_1			");
+	asm("$SCEN1_2:	addu	$3,$3,128	");		// increment by 2 block sizes
+	asm("addu 	$6, $0, 1		"); 			
+	asm("j		$SCEN1_1			");
 /*
 	State sequence of the load instruction:
 	Iteration	|	Address accessed	|	Stride detected	|	Prefetch address 	|   State
@@ -62,14 +62,14 @@ int main(void){
 		--> ~0% data cache miss rate
 */
 
-    // asm("$L201:	nop");
-	asm("$L201:	sltu	$2,$7,$9	");
+    // asm("$SCEN2_1:	nop");
+	asm("$SCEN2_1:	sltu	$2,$7,$9	");
 	asm("beq	$2,$0,$END		");
-	asm("lw		$8,0($7)		"); //this lw indexes memory at every 2 block sizes
-	asm("lw		$8,0($10)		"); //this lw indexes memory at every block size
+	asm("lw		$8,0($7)		"); 			// accesses every 2 block sizes
+	asm("lw		$8,0($10)		"); 			// acceses  every 1 block size
 	asm("addu	$7,$7,128		");
 	asm("addu	$10,$10,64		");
-	asm("j	$L201");
+	asm("j	$SCEN2_1");
 
 /*
 	State sequence of the first load instruction (offset by 25600000):
