@@ -531,7 +531,7 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
   /* ECE552 Assignment 4 - BEGIN CODE */
   static ghb_node_t *head = NULL;
   static ghb_node_t *tail = NULL;
-  static it_node_t *index_table;
+  static delta_table_t *delta_table = NULL;
   static int initialized = 0;
   static md_addr_t prev_addr = 0;
 
@@ -548,7 +548,7 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
     }
     tail = ptr;
     // initialize Index Table
-    index_table = (it_node_t*)calloc(1,sizeof(it_node_t));
+    delta_table = (delta_table_t*)calloc(1,sizeof(delta_table_t));
 
     // mark as initialized
     initialized = 1;
@@ -558,8 +558,8 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
   md_addr_t delta = addr - prev_addr;
   prev_addr = addr;
   md_addr_t index = 0;
-  index_table->old_delta = index_table->new_delta;
-  index_table->new_delta = delta;
+  delta_table->old_delta = delta_table->new_delta;
+  delta_table->new_delta = delta;
 
   // update GHB
   // evict tail
@@ -574,14 +574,14 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
   ptr->delta = delta;
 
   // prefetching logic
-  ghb_node_t *found[ISSUE_WIDTH] = {0};
+  ghb_node_t *found = NULL;
   // reverse traverse GHB to find matching deltas
   for (ptr = tail; ptr != head->next; ptr = ptr->prev) {
-    if ((ptr->delta == index_table->old_delta) &&
-        (ptr->prev->delta == index_table->new_delta)) {
+    if ((ptr->delta == delta_table->old_delta) &&
+        (ptr->prev->delta == delta_table->new_delta)) {
       ptr = ptr->prev->prev;
-      for (int i = 0; i < ISSUE_WIDTH && ptr != NULL; i++) {
-        found[i] = ptr;
+      if (ptr != NULL) {
+        found = ptr;
         ptr = ptr->prev;
       }
       break;
@@ -589,8 +589,8 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
   }
 
   // issue prefetches
-  for (int i = 0; i < ISSUE_WIDTH && found[i] != NULL; i++) {
-    md_addr_t prefetch_address = CACHE_BADDR(cp, addr + found[i]->delta);
+  if (found != NULL) {
+    md_addr_t prefetch_address = CACHE_BADDR(cp, addr + found->delta);
     // only prefetch if block not in cache --- Piazza
     if(!cache_probe(cp, prefetch_address)) {
       cache_access(cp, Read, prefetch_address, NULL, cp->bsize, 0, NULL, NULL, 1);

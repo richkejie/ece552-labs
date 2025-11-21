@@ -116,16 +116,15 @@ typedef struct reference_predictor_table{
 
 // definitions for open-ended prefetcher
 #define GHB_TABLE_SIZE 5
-#define ISSUE_WIDTH 1
 typedef struct global_history_buffer_table_node{
   struct global_history_buffer_table_node *next;
   struct global_history_buffer_table_node *prev;
   md_addr_t delta;
 } ghb_node_t;
-typedef struct index_table_element{
+typedef struct delta_table{
   md_addr_t old_delta;
   md_addr_t new_delta;
-} it_node_t;
+} delta_table_t;
 
 /* ECE552 Assignment 4 - END CODE */
 
