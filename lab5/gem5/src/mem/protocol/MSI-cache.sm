@@ -615,6 +615,40 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
 
   /* ECE552: Complete this section here */
- 
+  
+  /* ECE552 Assignment 5 - BEGIN CODE */
 
+
+  // =============================================================================
+  // TRANSITIONS from state I
+  // =============================================================================
+  transition(I, Load, IS_D) { // add in Ifetch event later; unified L1 instr and data cache
+    i_allocateL1CacheBlock;
+    v_allocateTBE;
+    as_issueGetS;
+    m_popMandatoryQueue;
+  }
+
+  transition(I, Store, IM_AD) {
+    i_allocateL1CacheBlock;
+    v_allocateTBE;
+    am_issueGetM;
+    m_popMandatoryQueue;
+  }
+
+  // =============================================================================
+  // TRANSITIONS from state IS_D
+  // =============================================================================
+  transition(IS_D, {Load, Store, Replacement, Inv}) {
+    z_stall;
+  }
+
+  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S) {
+    u_writeDataToCache;
+    rx_load_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+  }
+
+  /* ECE552 Assignment 5 - END CODE */
 }
