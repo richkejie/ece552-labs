@@ -45,12 +45,26 @@ machine(L1Cache, "MSI L1 Cache")
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
 
     /* ECE552: Complete this section here */
+    /* ECE552 Assignment 5 - BEGIN CODE */
+    S, AccessPermission:Read_Only, desc="Shared block";
+	  M, AccessPermission:Read_Write, desc="Modified block";
+    /* ECE552 Assignment 5 - END CODE */
    
     //========================
     //ECE552: Transient States
     //========================
 
     /* ECE552: Complete this section here */
+    /* ECE552 Assignment 5 - BEGIN CODE */
+    IS_D, AccessPermission:Busy, desc="Invalid to Shared Transient, Waiting for Data";
+    IM_AD, AccessPermission:Busy, desc="Invalid to Modified Transient, Waiting for Acknowledgement and Data";
+    IM_A, AccessPermission:Busy, desc="Invalid to Modified Transient, Waiting for Acknowledgement";
+    SM_AD, AccessPermission:Busy, desc="Shared to Modified Transient, Waiting for Acknowledgement and Data";
+    SM_A, AccessPermission:Busy, desc="Shared to Modified Transient, Waiting for Acknowledgement";
+    MI_A, AccessPermission:Busy, desc="Modified to Invalid Transient, Waiting for Acknowledgement";
+    SI_A, AccessPermission:Busy, desc="Shared to Invalid Transient, Waiting for Acknowledgement";
+    II_A, AccessPermission:Busy, desc="Invalid to Invalid Transient, Waiting for Acknowledgement";
+    /* ECE552 Assignment 5 - END CODE */
 
   }
 
