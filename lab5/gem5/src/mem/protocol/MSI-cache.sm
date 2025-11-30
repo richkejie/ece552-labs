@@ -622,9 +622,10 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
   // TRANSITIONS from state I
   // =============================================================================
-  transition(I, Load, IS_D) { // add in Ifetch event later; unified L1 instr and data cache
+  transition(I, {Load, Ifetch}, IS_D) { // add in Ifetch event later; unified L1 instr and data cache
     i_allocateL1CacheBlock;
     v_allocateTBE;
+    p_profileMiss;
     as_issueGetS;
     m_popMandatoryQueue;
   }
@@ -632,6 +633,7 @@ machine(L1Cache, "MSI L1 Cache")
   transition(I, Store, IM_AD) {
     i_allocateL1CacheBlock;
     v_allocateTBE;
+    p_profileMiss;
     am_issueGetM;
     m_popMandatoryQueue;
   }
@@ -649,6 +651,36 @@ machine(L1Cache, "MSI L1 Cache")
     w_deallocateTBE;
     n_popResponseQueue;
   }
+
+  // =============================================================================
+  // TRANSITIONS from state IM_AD
+  // =============================================================================
+  transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}) {
+    z_stall;
+  }
+  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
+    u_writeDataToCache;
+    w_deallocateTBE;
+    sx_store_hit;
+    n_popResponseQueue;
+  }
+  transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A) {
+    u_writeDataToCache;
+    q_updateAckCount;
+    n_popResponseQueue;
+  }
+  transition(IM_AD, Data_from_Dir_Ack_Cnt_Last, M) {
+    u_writeDataToCache;
+    q_updateAckCount;
+    w_deallocateTBE;
+    sx_store_hit;
+    n_popResponseQueue;
+  }
+  transition(IM_AD, Inv_Ack) {
+    q_updateAckCount;
+    n_popResponseQueue;
+  }
+
 
   /* ECE552 Assignment 5 - END CODE */
 }
