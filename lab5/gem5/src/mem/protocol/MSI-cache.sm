@@ -622,17 +622,19 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
   // TRANSITIONS from state I
   // =============================================================================
-  transition(I, Load, IS_D) { // add in Ifetch event later; unified L1 instr and data cache
-    i_allocateL1CacheBlock;
-    v_allocateTBE;
-    as_issueGetS;
-    m_popMandatoryQueue;
+  transition(I, {Load, Ifetch}, IS_D) { 
+    i_allocateL1CacheBlock;     // allocate L1 cache block since need to load in data from mem
+    v_allocateTBE;              // allocate TBE entry since moving to transient state
+    p_profileMiss;              // call this when core-initiated request results in cache miss (here block is invalid)
+    as_issueGetS;               // issue GETS to dir
+    m_popMandatoryQueue;        // pop from queue
   }
 
   transition(I, Store, IM_AD) {
     i_allocateL1CacheBlock;
     v_allocateTBE;
-    am_issueGetM;
+    p_profileMiss;
+    am_issueGetM;               // issue GETM to dir
     m_popMandatoryQueue;
   }
 
@@ -644,10 +646,10 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S) {
-    u_writeDataToCache;
-    rx_load_hit;
-    w_deallocateTBE;
-    n_popResponseQueue;
+    u_writeDataToCache;         // write the data to cache
+    rx_load_hit;                // indicate load completed and block was not present in local cache prior
+    w_deallocateTBE;            // deallocate TBE entry
+    n_popResponseQueue;         // pop from queue
   }
 
   // =============================================================================
@@ -656,26 +658,36 @@ machine(L1Cache, "MSI L1 Cache")
   transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}) {
     z_stall;
   }
-
   transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
     u_writeDataToCache;
-    rx_load_hit;
     w_deallocateTBE;
+    sx_store_hit;               // indicate store completed and block was not present in local cache prior or RO permissions
     n_popResponseQueue;
   }
   transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A) {
+    u_writeDataToCache;
+    q_updateAckCount;           // update the ack count
     n_popResponseQueue;
   }
 
-  transition(IM_AD, Inv_Ack, IM_AD) {
-    n_popResponseQueue;
+
+  transition(IM_AD, Data_from_Dir_Ack_Cnt_Last, M) { // we see data and last inv ack, go straight to M
+    u_writeDataToCache;
     q_updateAckCount;
+    w_deallocateTBE;
+    sx_store_hit;
+    n_popResponseQueue;
+  }
+
+  transition(IM_AD, Inv_Ack) {
+    q_updateAckCount;           // update ack count (decrement)
+    n_popResponseQueue;
   }
 
   // =============================================================================
   // TRANSITIONS from state IM_A
   // =============================================================================
-  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM, Inv}) {
+  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}) {
     z_stall;
   }
 
@@ -686,17 +698,16 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
   }
 
-  transition(IM_A, Inv_Ack, IM_A) {
-    n_popResponseQueue;
+  transition(IM_A, Inv_Ack) {
     q_updateAckCount;
+    n_popResponseQueue;
   }
 
   transition(IM_A, Inv_Ack_all, M) {
-    u_writeDataToCache;
-    rx_load_hit;
+    sx_store_hit;
     w_deallocateTBE;
-    n_popResponseQueue;
     q_updateAckCount;
+    n_popResponseQueue;
   }
 
   // =============================================================================
@@ -749,6 +760,7 @@ machine(L1Cache, "MSI L1 Cache")
     r_load_hit;
     n_popResponseQueue;
   }
+
 
 
   /* ECE552 Assignment 5 - END CODE */

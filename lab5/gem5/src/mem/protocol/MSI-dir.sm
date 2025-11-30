@@ -52,7 +52,11 @@ machine(Directory, "Directory protocol")
 
     /* ECE552: Complete this section here */
     /* ECE552 Assignment 5 - BEGIN CODE */
-    S_D, AccessPermission:Busy, desc="Shared Transient, Waiting for Data";
+    IS_D, AccessPermission:Busy, desc="Invalid to Shared Transient, Waiting for Memory Data";
+    IM_D, AccessPermission:Busy, desc="Invalid to Modified Transient, Waiting for Memory Data";
+    MS_D, AccessPermission:Busy, desc="Modified to Shared Transient, Waiting for Data";
+    MS_A, AccessPermission:Busy, desc="Modified to Shared Transient, Waiting for Memory Ack";
+    MI_A, AccessPermission:Busy, desc="Modified to Invalid Transient, Waiting for Memory Ack";
     /* ECE552 Assignment 5 - END CODE */
   }
 
@@ -547,12 +551,45 @@ getDirectoryEntry(address).Sharers);
   // =============================================================================
   // TRANSITIONS from I
   // =============================================================================
-  transition(I, GETS, S) {
+  transition(I, GETS, IS_D) {
+    vv_allocateTBEFromRequestNet;
     ars2_addRequestorToSharers;
     qf_queueMemoryFetchRequest;
-    d_sendData;
     i_popIncomingRequestQueue;
   }
+
+  transition(I, GETM, IM_D) {
+    vv_allocateTBEFromRequestNet;
+    e_ownerIsRequestor;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
+  }
+
+  // =============================================================================
+  // TRANSITIONS from IS_D
+  // =============================================================================
+  transition(IS_D, {GETS, GETM}) {
+    z_stall;
+  }
+  transition(IS_D, Memory_Data, S) {
+    w_deallocateTBE;
+    d_sendData;
+    qm_popMemQueue;
+  }
+
+  // =============================================================================
+  // TRANSITIONS from IM_D
+  // =============================================================================
+  transition(IM_D, {GETS, GETM}) {
+    z_stall;
+  }
+  transition(IM_D, Memory_Data, M) {
+    w_deallocateTBE;
+    d_sendData;
+    qm_popMemQueue;
+  }
+
+
 
   /* ECE552 Assignment 5 - END CODE */
 }
