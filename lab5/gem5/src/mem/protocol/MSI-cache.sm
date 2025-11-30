@@ -639,7 +639,7 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
   // TRANSITIONS from state IS_D
   // =============================================================================
-  transition(IS_D, {Load, Store, Replacement, Inv}) {
+  transition(IS_D, {Load, Store, Replacement}, IS_D) {
     z_stall;
   }
 
@@ -649,6 +649,107 @@ machine(L1Cache, "MSI L1 Cache")
     w_deallocateTBE;
     n_popResponseQueue;
   }
+
+  // =============================================================================
+  // TRANSITIONS from state IM_AD
+  // =============================================================================
+  transition(IM_AD, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}) {
+    z_stall;
+  }
+
+  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
+    u_writeDataToCache;
+    rx_load_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+  }
+  transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A) {
+    n_popResponseQueue;
+  }
+
+  transition(IM_AD, Inv_Ack, IM_AD) {
+    n_popResponseQueue;
+    q_updateAckCount;
+  }
+
+  // =============================================================================
+  // TRANSITIONS from state IM_A
+  // =============================================================================
+  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM, Inv}) {
+    z_stall;
+  }
+
+  transition(IM_A, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
+    u_writeDataToCache;
+    rx_load_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+  }
+
+  transition(IM_A, Inv_Ack, IM_A) {
+    n_popResponseQueue;
+    q_updateAckCount;
+  }
+
+  transition(IM_A, Inv_Ack_all, M) {
+    u_writeDataToCache;
+    rx_load_hit;
+    w_deallocateTBE;
+    n_popResponseQueue;
+    q_updateAckCount;
+  }
+
+  // =============================================================================
+  // TRANSITIONS from state S
+  // =============================================================================
+  transition(S, Inv, I) {
+    fi_sendInvAck;
+    o_popForwardedRequestQueue;
+  }
+
+  transition(S, Load, S) {
+    r_load_hit;
+    m_popMandatoryQueue;
+  }
+
+  transition(S, Store, SM_AD) {
+    am_issueGetM;
+    r_load_hit;
+    m_popMandatoryQueue;
+  }
+
+  transition(S, Replacement, SI_A) {
+    bs_issuePUTS;
+    r_load_hit;
+    n_popResponseQueue;
+  }
+
+
+  // =============================================================================
+  // TRANSITIONS from state SM_AD
+  // =============================================================================
+  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD) {
+    fi_sendInvAck;
+    n_popResponseQueue;
+  }
+
+  transition(S, Load, S) {
+    r_load_hit;
+    m_popMandatoryQueue;
+  }
+
+  transition(S, Store, SM_AD) {
+    am_issueGetM;
+    r_load_hit;
+    m_popMandatoryQueue;
+  }
+
+  transition(S, Replacement, SI_A) {
+    bs_issuePUTS;
+    r_load_hit;
+    n_popResponseQueue;
+  }
+
 
   /* ECE552 Assignment 5 - END CODE */
 }
