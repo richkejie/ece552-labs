@@ -42,12 +42,18 @@ machine(Directory, "Directory protocol")
     M, AccessPermission:Read_Write, desc="Modified";
 
     /* ECE552: Complete this section here */
+    /* ECE552 Assignment 5 - BEGIN CODE */
+    S, AccessPermission:Read_Only, desc="Shared";
+    /* ECE552 Assignment 5 - END CODE */
 
     //========================
     //ECE552: Transient States
     //========================
 
     /* ECE552: Complete this section here */
+    /* ECE552 Assignment 5 - BEGIN CODE */
+    S_D, AccessPermission:Busy, desc="Shared Transient, Waiting for Data";
+    /* ECE552 Assignment 5 - END CODE */
   }
 
   // =============================================================================
@@ -537,5 +543,16 @@ getDirectoryEntry(address).Sharers);
 
   /* ECE552: Complete this section here */
 
+  /* ECE552 Assignment 5 - BEGIN CODE */
+  // =============================================================================
+  // TRANSITIONS from I
+  // =============================================================================
+  transition(I, GETS, S) {
+    ars2_addRequestorToSharers;
+    qf_queueMemoryFetchRequest;
+    d_sendData;
+    i_popIncomingRequestQueue;
+  }
 
+  /* ECE552 Assignment 5 - END CODE */
 }
