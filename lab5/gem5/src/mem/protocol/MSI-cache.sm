@@ -622,12 +622,12 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
   // TRANSITIONS from state I
   // =============================================================================
-  transition(I, {Load, Ifetch}, IS_D) { // add in Ifetch event later; unified L1 instr and data cache
-    i_allocateL1CacheBlock;
-    v_allocateTBE;
-    p_profileMiss;
-    as_issueGetS;
-    m_popMandatoryQueue;
+  transition(I, {Load, Ifetch}, IS_D) { 
+    i_allocateL1CacheBlock;     // allocate L1 cache block since need to load in data from mem
+    v_allocateTBE;              // allocate TBE entry since moving to transient state
+    p_profileMiss;              // call this when core-initiated request results in cache miss (here block is invalid)
+    as_issueGetS;               // issue GETS to dir
+    m_popMandatoryQueue;        // pop from queue
   }
 
   transition(I, Store, IM_AD) {
